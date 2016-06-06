@@ -7,11 +7,14 @@ This tool analyze the PostgreSQL LWLock usage, and generate flamegraphs.
 * Java 8
 * PostgreSQL
 * sed
+* perl
+* [FlameGraph](https://github.com/brendangregg/FlameGraph)
 
-## Usage
+## Installation
 
 * Compile PostgreSQL
-* Run
+* Compile LWLockRun
+* Get FlameGraph
 
 ### Compile PostgreSQL
 
@@ -23,13 +26,28 @@ The patch can be found at https://github.com/jesperpedersen/postgres/tree/lwstat
 
 The two-phase commit report requires https://github.com/jesperpedersen/postgres/tree/pgbench_xa
 
+### Compile LWLockRun
+
+```bash
+/path/to/work_area
+/path/to/javac LWLockRun.java
+```
+
+### Get FlameGraph
+
+```bash
+/path/to/work_area
+wget https://raw.githubusercontent.com/brendangregg/FlameGraph/master/flamegraph.pl
+```
+
+## Usage
+
 ### Run
 
 ```bash
+/path/to/work_area
 /path/to/java LWLockRun
 ```
-
-Compile with ```javac``` before use.
 
 ## Configuration
 
