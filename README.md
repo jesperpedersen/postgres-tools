@@ -9,6 +9,10 @@ This repository contains various tools to do performance runs against
 
 Daily performance run against master branch
 
+### DiffRuns
+
+Compare two performance runs against each other
+
 ### LWLockRun
 
 Analysis of LWLock usage using flamegraphs
