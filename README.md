@@ -21,6 +21,10 @@ Analysis of LWLock usage using flamegraphs
 
 Flamegraphs of perf record runs
 
+### PostgreSQLInfo
+
+HTML report of PostgreSQL configuration
+
 ## License
 
 All tools are released under the MIT license.
