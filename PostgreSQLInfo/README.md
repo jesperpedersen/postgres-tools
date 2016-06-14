@@ -1,6 +1,6 @@
 # PostgreSQLInfo
 
-This tool generates a THML report about the PostgreSQL configuration.
+This tool generates a HTML report about the PostgreSQL configuration.
 
 ## Requirements
 
@@ -27,7 +27,7 @@ This tool generates a THML report about the PostgreSQL configuration.
 /path/to/java PostgreSQLInfo /path/to/data_directory
 ```
 
-PostgreSQLInfo takes an optional 2nd parameter, which is the name of report, f.ex.
+PostgreSQLInfo takes an optional 2nd parameter, which is the name of the report, f.ex.
 
 ```bash
 /path/to/work_area
@@ -36,7 +36,7 @@ PostgreSQLInfo takes an optional 2nd parameter, which is the name of report, f.e
 
 ## Report
 
-The reports are located in the '/path/to/work_area' directory
+The reports are located in the ```/path/to/work_area``` directory
 
 The report show
 
