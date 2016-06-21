@@ -25,6 +25,10 @@ Flamegraphs of perf record runs
 
 HTML report of PostgreSQL configuration
 
+### QueryAnalyzer
+
+Analysis of queries sent
+
 ## License
 
 All tools are released under the MIT license.
