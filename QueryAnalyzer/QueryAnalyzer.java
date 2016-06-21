@@ -128,7 +128,8 @@ public class QueryAnalyzer
       l.add("<ul>");
       for (String q : queryData.keySet())
       {
-         l.add("<li><a href=\"" + q + ".html\">" + q +"</a> (" + queryData.get(q) + ")</li>");
+         l.add("<li><a href=\"" + q + ".html\">" + q +"</a>" +
+               (!"".equals(queryData.get(q)) ? " (" + queryData.get(q) + ") " : "") + "</li>");
       }
       l.add("</ul>");
       
