@@ -17,7 +17,7 @@ This tool generates HTML reports about queries run against PostgreSQL.
 ### Compile QueryAnalyzer
 
 ```bash
-/path/to/work_area
+cd /path/to/work_area
 wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlparser/0.9.5/jsqlparser-0.9.5.jar
 /path/to/javac -classpath jsqlparser-0.9.5.jar QueryAnalyzer.java
 ```
@@ -31,14 +31,21 @@ Download from the [PostgreSQL JDBC](https://jdbc.postgresql.org/download.html) w
 ### Run
 
 ```bash
-/path/to/work_area
+cd /path/to/work_area
 /path/to/java -classpath .:postgresql-9.4.1207.jar:jsqlparser-0.9.5.jar QueryAnalyzer
 ```
 
 ## Configuration
 
 The configuration of QueryAnalyzer is done in the ```queryanalyzer.properties``` file, which supports the following
-options
+options.
+
+Alternative, Queryanalyzer can be configured through another properties file and executed with
+
+```bash
+cd /path/to/work_area
+/path/to/java -classpath .:postgresql-9.4.1207.jar:jsqlparser-0.9.5.jar QueryAnalyzer -c myprops.properties
+```
 
 ### host
 
@@ -69,6 +76,12 @@ Required option.
 The password of the user.
 
 Required option.
+
+### plan_count
+
+The number of times the query should be executed before measured.
+
+Default is ```5```
 
 ### query
 
