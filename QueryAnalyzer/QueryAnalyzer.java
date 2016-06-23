@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -36,9 +37,11 @@ import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
@@ -82,6 +85,15 @@ public class QueryAnalyzer
 
    /** Current table name */
    private static String currentTableName = null;
+
+   /** Tables:        Name        Column  Type */
+   private static Map<String, Map<String, Integer>> tables = new HashMap<>();
+   
+   /** Indexes:       Table       Index   Columns */
+   private static Map<String, Map<String, Set<String>>> indexes = new HashMap<>();
+   
+   /** Primary key:   Table   Columns */
+   private static Map<String, Set<String>> primaryKeys = new HashMap<>();
    
    /**
     * Write data to a file
@@ -144,10 +156,12 @@ public class QueryAnalyzer
     * @parma queryId The query identifier
     * @param origQuery The original query
     * @param query The executed query
+    * @param usedTables The used tables
     * @param plan The plan
     */
    private static void writeReport(String queryId,
                                    String origQuery, String query,
+                                   Set<String> usedTables,
                                    String plan) throws Exception
    {
       List<String> l = new ArrayList<>();
@@ -177,7 +191,7 @@ public class QueryAnalyzer
          l.add(query);
          l.add("</pre>");
       }
-      
+
       l.add("<h2>Plan</h2>");
 
       if (plan != null && !"".equals(plan))
@@ -187,6 +201,62 @@ public class QueryAnalyzer
          l.add("</pre>");
       }
 
+      l.add("<h2>Tables</h2>");
+      for (String tableName : usedTables)
+      {
+         Map<String, Integer> tableData = tables.get(tableName);
+         Set<String> pkInfo = primaryKeys.get(tableName);
+         if (tableData != null)
+         {
+            l.add("<h3>" + tableName + "</h3>");
+            l.add("<table>");
+            for (String columnName : tableData.keySet())
+            {
+               l.add("<tr>");
+               if (pkInfo.contains(columnName))
+               {
+                  l.add("<td><b>" + columnName + "</b></td>");
+                  l.add("<td><b>" + getTypeName(tableData.get(columnName)) + "</b></td>");
+               }
+               else
+               {
+                  l.add("<td>" + columnName + "</td>");
+                  l.add("<td>" + getTypeName(tableData.get(columnName)) + "</td>");
+               }
+               l.add("</tr>");
+            }
+            l.add("</table>");
+         }
+      }
+      
+      l.add("<h2>Indexes</h2>");
+      for (String tableName : usedTables)
+      {
+         Map<String, Set<String>> indexData = indexes.get(tableName);
+         Set<String> pkInfo = primaryKeys.get(tableName);
+         if (indexData != null)
+         {
+            l.add("<h3>" + tableName + "</h3>");
+            l.add("<table>");
+            for (String indexName : indexData.keySet())
+            {
+               l.add("<tr>");
+               if (indexData.get(indexName).equals(pkInfo))
+               {
+                  l.add("<td><b>" + indexName + "</b></td>");
+                  l.add("<td><b>" + indexData.get(indexName) + "</b></td>");
+               }
+               else
+               {
+                  l.add("<td>" + indexName + "</td>");
+                  l.add("<td>" + indexData.get(indexName) + "</td>");
+               }
+               l.add("</tr>");
+            }
+            l.add("</table>");
+         }
+      }
+      
       l.add("");
       l.add("<a href=\"index.html\">Back</a>");
       
@@ -247,7 +317,9 @@ public class QueryAnalyzer
                }
             }
 
-            writeReport(key, origQuery, query, plan);
+            Set<String> usedTables = getUsedTables(c, origQuery);
+            
+            writeReport(key, origQuery, query, usedTables, plan);
             result.put(key, planData);
          }
          catch (Exception e)
@@ -363,6 +435,7 @@ public class QueryAnalyzer
             {
                try
                {
+                  // Remove hack after 0.9.6 is out
                   boolean override = false;
                   if (currentColumn == null)
                   {
@@ -649,6 +722,67 @@ public class QueryAnalyzer
    }
    
    /**
+    * Get type name
+    * @param type
+    * @return The name
+    */
+   private static String getTypeName(int type)
+   {
+      switch (type)
+      {
+         case Types.BINARY:
+            return "BINARY";
+         case Types.BIT:
+            return "BIT";
+         case Types.BIGINT:
+            return "BIGINT";
+         case Types.BOOLEAN:
+            return "BOOLEAN";
+         case Types.CHAR:
+            return "CHAR";
+         case Types.DATE:
+            return "DATE";
+         case Types.DECIMAL:
+            return "DECIMAL";
+         case Types.DOUBLE:
+            return "DOUBLE";
+         case Types.FLOAT:
+            return "FLOAT";
+         case Types.INTEGER:
+            return "INTEGER";
+         case Types.LONGVARBINARY:
+            return "LONGVARBINARY";
+         case Types.LONGVARCHAR:
+            return "LONGVARCHAR";
+         case Types.NUMERIC:
+            return "NUMERIC";
+         case Types.REAL:
+            return "REAL";
+         case Types.SMALLINT:
+            return "SMALLINT";
+         case Types.TIME:
+            return "TIME";
+         case Types.TIME_WITH_TIMEZONE:
+            return "TIME_WITH_TIMEZONE";
+         case Types.TIMESTAMP:
+            return "TIMESTAMP";
+         case Types.TIMESTAMP_WITH_TIMEZONE:
+            return "TIMESTAMP_WITH_TIMEZONE";
+         case Types.TINYINT:
+            return "TINYINT";
+         case Types.VARBINARY:
+            return "VARBINARY";
+         case Types.VARCHAR:
+            return "VARCHAR";
+         default:
+            System.out.println("Unsupported value: " + type);
+            break;
+      }
+
+      return null;
+   }
+
+   /**
     * Execute statement
     * @param c The connection
     * @param s The string
@@ -740,6 +874,194 @@ public class QueryAnalyzer
       }
    }
 
+   /**
+    * Get the used tables for a query
+    * @param c The connection
+    * @param query The query
+    * @return The names
+    */
+   private static Set<String> getUsedTables(Connection c, String query) throws Exception
+   {
+      Set<String> result = new HashSet<>();
+
+      net.sf.jsqlparser.statement.Statement s = CCJSqlParserUtil.parse(query);
+      
+      if (s instanceof Select)
+      {
+         Select select = (Select)s;
+
+         StringBuilder buffer = new StringBuilder();
+         ExpressionDeParser expressionDeParser = new ExpressionDeParser()
+         {
+         };
+
+         SelectDeParser deparser = new SelectDeParser(expressionDeParser, buffer)
+         {
+            @Override
+            public void visit(Table table)
+            {
+               result.add(table.getName());
+            }
+         };
+         expressionDeParser.setSelectVisitor(deparser);
+         expressionDeParser.setBuffer(buffer);
+
+         select.getSelectBody().accept(deparser);
+      }
+      else if (s instanceof Update)
+      {
+         Update update = (Update)s;
+
+         for (Table table : update.getTables())
+         {
+            result.add(table.getName());
+         }
+
+         StringBuilder buffer = new StringBuilder();
+         ExpressionDeParser expressionDeParser = new ExpressionDeParser()
+         {
+         };
+
+         SelectDeParser selectDeParser = new SelectDeParser()
+         {
+            @Override
+            public void visit(Table table)
+            {
+               result.add(table.getName());
+            }
+         };
+         expressionDeParser.setSelectVisitor(selectDeParser);
+         expressionDeParser.setBuffer(buffer);
+
+         net.sf.jsqlparser.util.deparser.UpdateDeParser updateDeParser =
+            new net.sf.jsqlparser.util.deparser.UpdateDeParser(expressionDeParser, selectDeParser, buffer);
+
+         net.sf.jsqlparser.util.deparser.StatementDeParser statementDeParser =
+            new net.sf.jsqlparser.util.deparser.StatementDeParser(buffer)
+         {
+            @Override
+            public void visit(Update update)
+            {
+               updateDeParser.deParse(update);
+            }
+         };
+         
+         update.accept(statementDeParser);
+      }
+      else if (s instanceof Delete)
+      {
+         Delete delete = (Delete)s;
+
+         result.add(delete.getTable().getName());
+      }
+
+      for (String tableName : result)
+      {
+         if (!tables.containsKey(tableName))
+         {
+            Map<String, Integer> tableData = new HashMap<>();
+            ResultSet rs = null;
+            try
+            {
+               DatabaseMetaData dmd = c.getMetaData();
+
+               rs = dmd.getColumns(null, null, tableName.toLowerCase(), "");
+               while (rs.next())
+               {
+                  String columnName = rs.getString("COLUMN_NAME");
+                  int dataType = rs.getInt("DATA_TYPE");
+                  tableData.put(columnName, dataType);
+               }
+            
+               tables.put(tableName, tableData);
+            }
+            finally
+            {
+               if (rs != null)
+               {
+                  try
+                  {
+                     rs.close();
+                  }
+                  catch (Exception e)
+                  {
+                     // Ignore
+                  }
+               }
+            }
+
+            rs = null;
+            try
+            {
+               DatabaseMetaData dmd = c.getMetaData();
+               Map<String, Set<String>> indexInfo = new TreeMap<>();
+
+               rs = dmd.getIndexInfo(null, null, tableName.toLowerCase(), false, false);
+               while (rs.next())
+               {
+                  String indexName = rs.getString("INDEX_NAME");
+                  String columnName = rs.getString("COLUMN_NAME");
+
+                  Set<String> existing = indexInfo.get(indexName);
+                  if (existing == null)
+                     existing = new TreeSet<>();
+
+                  existing.add(columnName);
+                  indexInfo.put(indexName, existing);
+               }
+
+               indexes.put(tableName, indexInfo);
+            }
+            finally
+            {
+               if (rs != null)
+               {
+                  try
+                  {
+                     rs.close();
+                  }
+                  catch (Exception e)
+                  {
+                     // Ignore
+                  }
+               }
+            }
+
+            rs = null;
+            try
+            {
+               DatabaseMetaData dmd = c.getMetaData();
+               Set<String> pkInfo = new HashSet<>();
+
+               rs = dmd.getPrimaryKeys(null, null, tableName.toLowerCase());
+               while (rs.next())
+               {
+                  String columnName = rs.getString("COLUMN_NAME");
+                  pkInfo.add(columnName);
+               }
+
+               primaryKeys.put(tableName, pkInfo);
+            }
+            finally
+            {
+               if (rs != null)
+               {
+                  try
+                  {
+                     rs.close();
+                  }
+                  catch (Exception e)
+                  {
+                     // Ignore
+                  }
+               }
+            }
+         }
+      }
+      
+      return result;
+   }
+   
    /**
     * Read the configuration (queryanalyzer.properties)
     * @param config The configuration
