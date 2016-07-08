@@ -13,6 +13,10 @@ Daily performance run against master branch
 
 Compare two performance runs against each other
 
+### LogAnalyzer
+
+Overview and interactions of queries sent
+
 ### LWLockRun
 
 Analysis of LWLock usage using flamegraphs
