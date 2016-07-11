@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -297,12 +298,15 @@ public class LogAnalyzer
    private static void writeQueryAnalyzerFile() throws Exception
    {
       List<String> l = new ArrayList<>();
+      List<String> queries = new ArrayList<>();
 
       int select = 1;
       int update = 1;
       int insert = 1;
       int delete = 1;
 
+      int padding = (int)Math.log10(statements.size()) + 1;
+      
       l.add("# https://github.com/jesperpedersen/postgres-tools/tree/master/QueryAnalyzer");
       l.add("host=localhost # ChangeMe");
       l.add("port=5432 # ChangeMe");
@@ -315,26 +319,29 @@ public class LogAnalyzer
          String upper = stmt.toUpperCase();
          if (upper.startsWith("SELECT"))
          {
-            l.add("query.select." + select + "=" + stmt);
+            queries.add("query.select." + String.format("%0" + padding + "d", select) + "=" + stmt);
             select++;
          }
          else if (upper.startsWith("UPDATE"))
          {
-            l.add("query.update." + update + "=" + stmt);
+            queries.add("query.update." + String.format("%0" + padding + "d", update) + "=" + stmt);
             update++;
          }
          else if (upper.startsWith("INSERT"))
          {
-            l.add("query.insert." + insert + "=" + stmt);
+            queries.add("query.insert." + String.format("%0" + padding + "d", insert) + "=" + stmt);
             insert++;
          }
          else if (upper.startsWith("DELETE"))
          {
-            l.add("query.delete." + delete + "=" + stmt);
+            queries.add("query.delete." + String.format("%0" + padding + "d", delete) + "=" + stmt);
             delete++;
          }
       }
 
+      Collections.sort(queries);
+      l.addAll(queries);
+      
       writeFile(Paths.get("report", "run.properties"), l);
    }
    
