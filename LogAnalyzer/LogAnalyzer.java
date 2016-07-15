@@ -54,6 +54,12 @@ public class LogAnalyzer
    /** Statements:    SQL     Count */
    private static Map<String, Integer> statements = new TreeMap<>();
 
+   /** Max time:      SQL     Max time */
+   private static Map<String, Double> maxtime = new TreeMap<>();
+
+   /** Total time:    SQL     Time */
+   private static Map<String, Double> totaltime = new TreeMap<>();
+
    /** The file name */
    private static String filename;
    
@@ -241,17 +247,94 @@ public class LogAnalyzer
       l.add("</table>");
       l.add("<p>");
 
-      l.add("<h2>Interactions</h2>");
+      l.add("<h2>Total time</h2>");
+      List<String> interactionLinks = new ArrayList<>();
       for (Integer processId : data.keySet())
       {
          List<LogEntry> lle = data.get(processId);
          int executeCount = getExecuteCount(lle);
          if (executeCount > 0)
          {
-            l.add("<a href=\"" + processId + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
+            interactionLinks.add("<a href=\"" + processId + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
             writeInteractionReport(processId, lle);
          }
       }
+
+      TreeMap<Double, List<String>> times = new TreeMap<>();
+      for (String stmt : totaltime.keySet())
+      {
+         Double d = totaltime.get(stmt);
+         List<String> stmts = times.get(d);
+         if (stmts == null)
+            stmts = new ArrayList<>();
+
+         stmts.add(stmt);
+         times.put(d, stmts);
+      }
+
+      l.add("<table border=\"1\">");
+      int count = 0;
+      for (Double d : times.descendingKeySet())
+      {
+         List<String> stmts = times.get(d);
+         StringBuilder sb = new StringBuilder();
+         for (int i = 0; i < stmts.size(); i++)
+         {
+            sb = sb.append(stmts.get(i));
+            if (i < stmts.size() - 1)
+               sb = sb.append("<p>");
+         }
+
+         l.add("<tr>");
+         l.add("<td>" + String.format("%.3f", d) + "ms</td>");
+         l.add("<td>" + sb.toString() + "</td>");
+         l.add("</tr>");
+         count++;
+
+         if (count == 20)
+            break;
+      }
+      l.add("</table>");
+      
+      l.add("<h2>Max time</h2>");
+      times = new TreeMap<>();
+      for (String stmt : maxtime.keySet())
+      {
+         Double d = maxtime.get(stmt);
+         List<String> stmts = times.get(d);
+         if (stmts == null)
+            stmts = new ArrayList<>();
+
+         stmts.add(stmt);
+         times.put(d, stmts);
+      }
+
+      l.add("<table border=\"1\">");
+      count = 0;
+      for (Double d : times.descendingKeySet())
+      {
+         List<String> stmts = times.get(d);
+         StringBuilder sb = new StringBuilder();
+         for (int i = 0; i < stmts.size(); i++)
+         {
+            sb = sb.append(stmts.get(i));
+            if (i < stmts.size() - 1)
+               sb = sb.append("<p>");
+         }
+
+         l.add("<tr>");
+         l.add("<td>" + String.format("%.3f", d) + "ms</td>");
+         l.add("<td>" + sb.toString() + "</td>");
+         l.add("</tr>");
+         count++;
+
+         if (count == 20)
+            break;
+      }
+      l.add("</table>");
+      
+      l.add("<h2>Interactions</h2>");
+      l.addAll(interactionLinks);
       
       l.add("</body>");
       l.add("</html>");
@@ -329,6 +412,26 @@ public class LogAnalyzer
                }
                else
                {
+                  // Total time
+                  Double time = totaltime.get(s);
+                  if (time == null)
+                  {
+                     time = new Double(duration);
+                  }
+                  else
+                  {
+                     time = new Double(time.doubleValue() + duration);
+                  }
+                  totaltime.put(s, time);
+
+                  // Max time
+                  time = maxtime.get(s);
+                  if (time == null || duration > time.doubleValue())
+                  {
+                     time = new Double(duration);
+                     maxtime.put(s, time);
+                  }
+                  
                   if (inTransaction)
                      transactionTime += duration;
                }
