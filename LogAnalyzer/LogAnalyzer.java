@@ -206,8 +206,8 @@ public class LogAnalyzer
       l.add("<td>" + String.format("%.2f", ((deleteWeight / totalWeight) * 100)) + "%</td>");
       l.add("<td><b>TOTAL</b></td>");
       l.add("<td>" +  String.format("%.3f", parseTime + bindTime + executeTime) + " ms</td>");
-      l.add("<td><b>EMPTY</b></td>");
-      l.add("<td>" +  String.format("%.3f", emptyTime) + " ms</td>");
+      l.add("<td>" + (emptyTime > 0.0 ? "<b>EMPTY</b>" : "") + "</td>");
+      l.add("<td>" + (emptyTime > 0.0 ? String.format("%.3f", emptyTime) + " ms" : "") + "</td>");
       l.add("</tr>");
       l.add("</table>");
 
