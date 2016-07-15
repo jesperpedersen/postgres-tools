@@ -317,12 +317,12 @@ public class LogAnalyzer
                   inTransaction = true;
                   transactionTime = duration;
                }
-               else if ("COMMIT".equals(s))
+               else if (s.startsWith("COMMIT"))
                {
                   commit++;
                   transactionTime += duration;
                }
-               else if ("ROLLBACK".equals(s))
+               else if (s.startsWith("ROLLBACK"))
                {
                   rollback++;
                   transactionTime += duration;
@@ -340,11 +340,11 @@ public class LogAnalyzer
                queries.add("<td>" + s + "</td>");
                queries.add("</tr>");
 
-               if ("COMMIT".equals(s))
+               if (s.startsWith("COMMIT"))
                {
                   inTransaction = false;
                }
-               else if ("ROLLBACK".equals(s))
+               else if (s.startsWith("ROLLBACK"))
                {
                   inTransaction = false;
                }
@@ -555,7 +555,7 @@ public class LogAnalyzer
     */
    private static boolean filterStatement(String stmt)
    {
-      if ("BEGIN".equals(stmt) || "ROLLBACK".equals(stmt) || "COMMIT".equals(stmt))
+      if ("BEGIN".equals(stmt) || stmt.startsWith("ROLLBACK") || stmt.startsWith("COMMIT"))
          return true;
 
       return false;
