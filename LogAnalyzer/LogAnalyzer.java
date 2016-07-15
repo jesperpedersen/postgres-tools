@@ -39,11 +39,17 @@ import java.util.TreeMap;
  */
 public class LogAnalyzer
 {
-   /** Raw data:      Process  LogEntry */
-   private static Map<Integer, List<LogEntry>> rawData = new TreeMap<>();
+   /** Color 1 */
+   private static final String COLOR_1 = "#cce6ff";
 
-   /** Executed:      Process  Statements */
-   private static Map<Integer, List<String>> executed = new TreeMap<>();
+   /** Color 2 */
+   private static final String COLOR_2 = "#ccffcc";
+
+   /** Raw data:      Process  Log */
+   private static Map<Integer, List<String>> rawData = new TreeMap<>();
+
+   /** Data:          Process  LogEntry */
+   private static Map<Integer, List<LogEntry>> data = new TreeMap<>();
 
    /** Statements:    SQL     Count */
    private static Map<String, Integer> statements = new TreeMap<>();
@@ -65,6 +71,9 @@ public class LogAnalyzer
    
    /** Execute time */
    private static double executeTime;
+   
+   /** Empty time */
+   private static double emptyTime;
    
    /**
     * Write data to a file
@@ -173,24 +182,32 @@ public class LogAnalyzer
       l.add("<td>" +  String.format("%.2f", ((selectWeight / totalWeight) * 100)) + "%</td>");
       l.add("<td><b>PARSE</b></td>");
       l.add("<td>" +  String.format("%.3f", parseTime) + " ms</td>");
+      l.add("<td><b>BEGIN</b></td>");
+      l.add("<td>" + statements.get("BEGIN") + "</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>UPDATE</b></td>");
       l.add("<td>" + String.format("%.2f", ((updateWeight / totalWeight) * 100)) + "%</td>");
       l.add("<td><b>BIND</b></td>");
       l.add("<td>" +  String.format("%.3f", bindTime) + " ms</td>");
+      l.add("<td><b>COMMIT</b></td>");
+      l.add("<td>" + statements.get("COMMIT") + "</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>INSERT</b></td>");
       l.add("<td>" + String.format("%.2f", ((insertWeight / totalWeight) * 100)) + "%</td>");
       l.add("<td><b>EXECUTE</b></td>");
       l.add("<td>" +  String.format("%.3f", executeTime) + " ms</td>");
+      l.add("<td><b>ROLLBACK</b></td>");
+      l.add("<td>" + statements.get("ROLLBACK") + "</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>DELETE</b></td>");
       l.add("<td>" + String.format("%.2f", ((deleteWeight / totalWeight) * 100)) + "%</td>");
-      l.add("<td>&nbsp;</td>");
-      l.add("<td>&nbsp;</td>");
+      l.add("<td><b>TOTAL</b></td>");
+      l.add("<td>" +  String.format("%.3f", parseTime + bindTime + executeTime) + " ms</td>");
+      l.add("<td><b>EMPTY</b></td>");
+      l.add("<td>" +  String.format("%.3f", emptyTime) + " ms</td>");
       l.add("</tr>");
       l.add("</table>");
 
@@ -224,29 +241,16 @@ public class LogAnalyzer
       l.add("</table>");
       l.add("<p>");
 
-      l.add("<h2>Transactions</h2>");
-      l.add("<table>");
-      l.add("<tr>");
-      l.add("<td>BEGIN</td>");
-      l.add("<td>" + statements.get("BEGIN") + "</td>");
-      l.add("</tr>");
-      l.add("<tr>");
-      l.add("<td>COMMIT</td>");
-      l.add("<td>" + statements.get("COMMIT") + "</td>");
-      l.add("</tr>");
-      l.add("<tr>");
-      l.add("<td>ROLLBACK</td>");
-      l.add("<td>" + statements.get("ROLLBACK") + "</td>");
-      l.add("</tr>");
-      l.add("</table>");
-      l.add("<p>");
-      
       l.add("<h2>Interactions</h2>");
-      for (Integer processId : executed.keySet())
+      for (Integer processId : data.keySet())
       {
-         List<String> data = executed.get(processId);
-         l.add("<a href=\"" + processId + ".html\">" + processId + "</a>(" + data.size() + ")&nbsp;");
-         writeInteractionReport(processId, data);
+         List<LogEntry> lle = data.get(processId);
+         int executeCount = getExecuteCount(lle);
+         if (executeCount > 0)
+         {
+            l.add("<a href=\"" + processId + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
+            writeInteractionReport(processId, lle);
+         }
       }
       
       l.add("</body>");
@@ -258,12 +262,105 @@ public class LogAnalyzer
    /**
     * Write the interaction report
     * @param processId The process id
-    * @param data The data
+    * @param lle The interactions
     */
-   private static void writeInteractionReport(Integer processId, List<String> data) throws Exception
+   private static void writeInteractionReport(Integer processId, List<LogEntry> lle) throws Exception
    {
-      List<String> l = new ArrayList<>();
+      List<String> queries = new ArrayList<>();
+      double totalDuration = 0.0;
+      double totalEmpty = 0.0;
+      double duration = 0.0;
+      int begin = 0;
+      int commit = 0;
+      int rollback = 0;
+      boolean color = true;
+      boolean inTransaction = false;
+      double transactionTime = 0.0;
+      
+      for (LogEntry le : lle)
+      {
+         if (le.isParse())
+         {
+            duration += le.getDuration();
+            totalDuration += duration;
+         }
+         else if (le.isBind())
+         {
+            duration += le.getDuration();
+            totalDuration += duration;
+            
+            String s = le.getStatement();
+            if (s == null || "".equals(s.trim()))
+            {
+               queries.add("<tr>");
+               queries.add("<td>" + String.format("%.3f", duration) + "</td>");
+               queries.add("<td>" + String.format("%.3f", duration) + "</td>");
+               queries.add("<td>" + (le.isPrepared() ? "P" : "S") + "</td>");
+               queries.add("<td></td>");
+               queries.add("</tr>");
+               totalEmpty += duration;
+               duration = 0.0;
+               transactionTime = 0.0;
+            }
+         }
+         else if (le.isExecute())
+         {
+            duration += le.getDuration();
+            totalDuration += duration;
 
+            String s = le.getStatement();
+            if (s != null)
+            {
+               if ("BEGIN".equals(s))
+               {
+                  begin++;
+                  inTransaction = true;
+                  transactionTime = duration;
+               }
+               else if ("COMMIT".equals(s))
+               {
+                  commit++;
+                  transactionTime += duration;
+               }
+               else if ("ROLLBACK".equals(s))
+               {
+                  rollback++;
+                  transactionTime += duration;
+               }
+               else
+               {
+                  if (inTransaction)
+                     transactionTime += duration;
+               }
+               
+               queries.add("<tr style=\"background-color: " + (color ? COLOR_1 : COLOR_2) + ";\">");
+               queries.add("<td>" + String.format("%.3f", (inTransaction ? transactionTime : duration)) + "</td>");
+               queries.add("<td>" + String.format("%.3f", duration) + "</td>");
+               queries.add("<td>" + (le.isPrepared() ? "P" : "S") + "</td>");
+               queries.add("<td>" + s + "</td>");
+               queries.add("</tr>");
+
+               if ("COMMIT".equals(s))
+               {
+                  inTransaction = false;
+               }
+               else if ("ROLLBACK".equals(s))
+               {
+                  inTransaction = false;
+               }
+
+               if (!inTransaction)
+               {
+                  color = !color;
+                  transactionTime = 0.0;
+               }
+
+               duration = 0.0;
+            }
+         }
+      }
+
+      List<String> l = new ArrayList<>();
       l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
       l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
       l.add("");
@@ -276,14 +373,28 @@ public class LogAnalyzer
       l.add("<h1>" + processId + "</h1>");
       l.add("");
 
-      l.add("<a href=\"" + processId + ".log\">Raw</a>");
+      l.add("<h2>Overview</h2>");
+      l.add("<table>");
+      l.add("<tr>");
+      l.add("<td><b>Time</b></td>");
+      l.add("<td>" + String.format("%.3f", totalDuration) + " ms" +
+            (totalEmpty > 0.0 ? " (" + String.format("%.3f", totalEmpty) + " ms)" : "")
+            + "</td>");
+      l.add("</tr>");
+      l.add("<tr>");
+      l.add("<td><b>Transaction</b></td>");
+      l.add("<td>BEGIN: " + begin + " / COMMIT: " + commit + " / ROLLBACK: " + rollback + "</td>");
+      l.add("</tr>");
+      l.add("</table>");
 
       l.add("<h2>Executed</h2>");
-      
-      l.add("<pre>");
-      l.addAll(data);
-      l.add("</pre>");
+      l.add("<table border=\"1\">");
+      l.addAll(queries);
+      l.add("</table>");
 
+      l.add("<h2>Raw</h2>");
+      l.add("<a href=\"" + processId + ".log\">Link</a>");
+      
       l.add("<p>");
       l.add("<a href=\"index.html\">Back</a>");
       l.add("</body>");
@@ -346,6 +457,24 @@ public class LogAnalyzer
    }
    
    /**
+    * Get the execute count
+    * @param lle The interactions
+    * @return The count
+    */
+   private static int getExecuteCount(List<LogEntry> lle)
+   {
+      int count = 0;
+
+      for (LogEntry le : lle)
+      {
+         if (le.isExecute())
+            count++;
+      }
+      
+      return count;
+   }
+   
+   /**
     * Process the log
     */
    private static void processLog() throws Exception
@@ -355,49 +484,39 @@ public class LogAnalyzer
       for (int i = 0; i < l.size(); i++)
       {
          String s = l.get(i);
-         int bracket1Start = s.indexOf("[");
-         int bracket1End = s.indexOf("]");
-         int bracket2Start = s.indexOf("[", bracket1End + 1);
-         int bracket2End = s.indexOf("]", bracket1End + 1);
+         LogEntry le = new LogEntry(s);
 
-         Integer processId = Integer.valueOf(s.substring(0, bracket1Start).trim());
-         String timestamp = s.substring(bracket1Start + 1, bracket1End);
-         Integer transactionId = Integer.valueOf(s.substring(bracket2Start + 1, bracket2End));
-         String statement = s.substring(bracket2End + 2);
-
-         LogEntry le = new LogEntry(processId, timestamp, transactionId, statement);
-
-         if (i == 0)
-         {
-            startDate = le.getTimestamp();
-         }
-         else if (i == l.size() - 1)
-         {
-            endDate = le.getTimestamp();
-         }
-         
          // Raw data insert
-         List<LogEntry> lle = rawData.get(processId);
+         List<String> ls = rawData.get(le.getProcessId());
+         if (ls == null)
+            ls = new ArrayList<>();
+         ls.add(s);
+         rawData.put(le.getProcessId(), ls);
+
+         // Data insert
+         List<LogEntry> lle = data.get(le.getProcessId());
          if (lle == null)
             lle = new ArrayList<>();
          lle.add(le);
-         rawData.put(processId, lle);
-
-         if (isParse(statement))
+         data.put(le.getProcessId(), lle);
+         
+         if (le.isParse())
          {
-            parseTime += getDuration(statement);
+            parseTime += le.getDuration();
          }
-         else if (isBind(statement))
+         else if (le.isBind())
          {
-            bindTime += getDuration(statement);
-         }
-         else if (isExecute(statement))
-         {
-            executeTime += getDuration(statement);
+            bindTime += le.getDuration();
 
-            int execute = statement.indexOf("execute");
-            String stmt = statement.substring(statement.indexOf(":", execute) + 2);
-            stmt = stmt.replace('$', '?');
+            String stmt = le.getStatement();
+            if (stmt == null || "".equals(stmt.trim()))
+               emptyTime += le.getDuration() + lle.get(lle.size() - 2).getDuration();
+         }
+         else if (le.isExecute())
+         {
+            executeTime += le.getDuration();
+
+            String stmt = le.getStatement();
 
             // Statements insert
             Integer count = statements.get(stmt);
@@ -410,95 +529,25 @@ public class LogAnalyzer
                count = Integer.valueOf(count.intValue() + 1);
             }
             statements.put(stmt, count);
-
-            // Executed insert
-            List<String> ls = executed.get(processId);
-            if (ls == null)
-               ls = new ArrayList<>();
-            ls.add(stmt);
-            executed.put(processId, ls);
          }
+         
+         if (i == 0)
+         {
+            startDate = le.getTimestamp();
+         }
+         else if (i == l.size() - 1)
+         {
+            endDate = le.getTimestamp();
+         }         
       }
 
       for (Integer proc : rawData.keySet())
       {
-         List<String> write = new ArrayList<>();
-         List<LogEntry> lle = rawData.get(proc);
-
-         for (LogEntry le : lle)
-            write.add(le.toString());
-
+         List<String> write = rawData.get(proc);
          writeFile(Paths.get("report", proc + ".log"), write);
       }      
    }
 
-   /**
-    * Is parse
-    * @param line The log line
-    * @return True if parse, otherwise false
-    */
-   private static boolean isParse(String line)
-   {
-      int offset = line.indexOf("parse <");
-      if (offset != -1)
-         return true;
-
-      offset = line.indexOf("parse S");
-      if (offset != -1)
-         return true;
-      
-      return false;
-   }
-      
-   /**
-    * Is bind
-    * @param line The log line
-    * @return True if bind, otherwise false
-    */
-   private static boolean isBind(String line)
-   {
-      int offset = line.indexOf("bind <");
-      if (offset != -1)
-         return true;
-
-      offset = line.indexOf("bind S");
-      if (offset != -1)
-         return true;
-      
-      return false;
-   }
-      
-   /**
-    * Is execute
-    * @param line The log line
-    * @return True if execute, otherwise false
-    */
-   private static boolean isExecute(String line)
-   {
-      int offset = line.indexOf("execute <");
-      if (offset != -1)
-         return true;
-
-      offset = line.indexOf("execute S");
-      if (offset != -1)
-         return true;
-      
-      return false;
-   }
-      
-   /**
-    * Get the duration of a statement
-    * @param line The log line
-    * @return The duration
-    */
-   private static double getDuration(String line)
-   {
-      int start = line.indexOf("duration:");
-      int end = line.indexOf("ms", start);
-
-      return Double.valueOf(line.substring(start + 10, end - 1));
-   }
-      
    /**
     * Should the statement be filtered from the report
     * @param stmt The statement
@@ -556,14 +605,33 @@ public class LogAnalyzer
       private int processId;
       private String timestamp;
       private int transactionId;
+      private String fullStatement;
       private String statement;
+      private boolean prepared;
+      private double duration;
+      private boolean parse;
+      private boolean bind;
+      private boolean execute;
       
-      LogEntry(int processId, String timestamp, int transactionId, String statement)
+      LogEntry(String s)
       {
-         this.processId = processId;
-         this.timestamp = timestamp;
-         this.transactionId = transactionId;
-         this.statement = statement;
+         int bracket1Start = s.indexOf("[");
+         int bracket1End = s.indexOf("]");
+         int bracket2Start = s.indexOf("[", bracket1End + 1);
+         int bracket2End = s.indexOf("]", bracket1End + 1);
+
+         this.processId = Integer.valueOf(s.substring(0, bracket1Start).trim());
+         this.timestamp = s.substring(bracket1Start + 1, bracket1End);
+         this.transactionId = Integer.valueOf(s.substring(bracket2Start + 1, bracket2End));
+         this.fullStatement = s.substring(bracket2End + 2);
+
+         this.statement = null;
+         this.prepared = false;
+
+         this.duration = getDuration(this.fullStatement);
+         this.parse = isParse(this.fullStatement);
+         this.bind = isBind(this.fullStatement);
+         this.execute = isExecute(this.fullStatement);
       }
 
       int getProcessId()
@@ -586,10 +654,133 @@ public class LogAnalyzer
          return statement;
       }
 
+      double getDuration()
+      {
+         return duration;
+      }
+      
+      boolean isPrepared()
+      {
+         return prepared;
+      }
+      
+      boolean isParse()
+      {
+         return parse;
+      }
+      
+      boolean isBind()
+      {
+         return bind;
+      }
+      
+      boolean isExecute()
+      {
+         return execute;
+      }
+      
+      /**
+       * Is parse
+       * @param line The log line
+       * @return True if parse, otherwise false
+       */
+      private boolean isParse(String line)
+      {
+         int offset = line.indexOf("parse <");
+         if (offset != -1)
+         {
+            statement = line.substring(line.indexOf(":", offset) + 2);
+            statement = statement.replace('$', '?');
+            return true;
+         }
+
+         offset = line.indexOf("parse S");
+         if (offset != -1)
+         {
+            statement = line.substring(line.indexOf(":", offset) + 2);
+            statement = statement.replace('$', '?');
+            prepared = true;
+            return true;
+         }
+      
+         return false;
+      }
+      
+      /**
+       * Is bind
+       * @param line The log line
+       * @return True if bind, otherwise false
+       */
+      private boolean isBind(String line)
+      {
+         int offset = line.indexOf("bind <");
+         if (offset != -1)
+         {
+            statement = line.substring(line.indexOf(":", offset) + 2);
+            statement = statement.replace('$', '?');
+            return true;
+         }
+
+         offset = line.indexOf("bind S");
+         if (offset != -1)
+         {
+            statement = line.substring(line.indexOf(":", offset) + 2);
+            statement = statement.replace('$', '?');
+            prepared = true;
+            return true;
+         }
+      
+         return false;
+      }
+      
+      /**
+       * Is execute
+       * @param line The log line
+       * @return True if execute, otherwise false
+       */
+      private boolean isExecute(String line)
+      {
+         int offset = line.indexOf("execute <");
+         if (offset != -1)
+         {
+            statement = line.substring(line.indexOf(":", offset) + 2);
+            statement = statement.replace('$', '?');
+            return true;
+         }
+         
+         offset = line.indexOf("execute S");
+         if (offset != -1)
+         {
+            statement = line.substring(line.indexOf(":", offset) + 2);
+            statement = statement.replace('$', '?');
+            prepared = true;
+            return true;
+         }
+         
+         return false;
+      }
+      
+      /**
+       * Get the duration of a statement
+       * @param line The log line
+       * @return The duration
+       */
+      private double getDuration(String line)
+      {
+         int start = line.indexOf("duration:");
+         if (start != -1)
+         {
+            int end = line.indexOf("ms", start);
+            return Double.valueOf(line.substring(start + 10, end - 1));
+         }
+
+         return 0.0;
+      }
+      
       @Override
       public String toString()
       {
-         return processId + " [" + timestamp + "] [" + transactionId + "] " + statement;
+         return processId + " [" + timestamp + "] [" + transactionId + "] " + fullStatement;
       }
    }
 }
