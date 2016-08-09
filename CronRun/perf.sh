@@ -25,6 +25,8 @@
 SECONDS=0
 DATE=`date +"%Y%m%d"`
 CLIENTS="1 10 25 50 75 100 125 150 175 200"
+HOST=localhost
+PORT=5432
 SCALE=3000
 TIME=180
 PGSQL_ROOT=/opt/postgresql-9.6
@@ -34,6 +36,9 @@ COMPILE_OPTIONS="--with-openssl --with-gssapi --enable-debug --enable-depend"
 COMPILE_JOBS=60
 CONFIGURATION=/home/postgres/Configuration/9.6
 PATCHES=always
+RUN_ONEPC=1
+RUN_ONEPCP=1
+RUN_RO=1
 RUN_TWOPC=1
 
 function postgresql_start()
@@ -89,14 +94,14 @@ function postgresql_compile()
 
 function pgbench_init_logged()
 {
-    $PGSQL_ROOT/bin/createdb -E UTF8 pgbench >> $DATE-$HEAD-build.log
-    $PGSQL_ROOT/bin/pgbench -i -s $SCALE -q pgbench >> $DATE-$HEAD-build.log
+    $PGSQL_ROOT/bin/createdb -h $HOST -p $PORT -E UTF8 pgbench >> $DATE-$HEAD-build.log
+    $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -i -s $SCALE -q pgbench >> $DATE-$HEAD-build.log
 }
 
 function pgbench_init_unlogged()
 {
-    $PGSQL_ROOT/bin/createdb -E UTF8 pgbench >> $DATE-$HEAD-build.log
-    $PGSQL_ROOT/bin/pgbench -i -s $SCALE -q --unlogged-tables pgbench >> $DATE-$HEAD-build.log
+    $PGSQL_ROOT/bin/createdb -h $HOST -p $PORT -E UTF8 pgbench >> $DATE-$HEAD-build.log
+    $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -i -s $SCALE -q --unlogged-tables pgbench >> $DATE-$HEAD-build.log
 }
 
 function pgbench_1pc_standard()
@@ -105,11 +110,11 @@ function pgbench_1pc_standard()
     touch $FILE
     for i in $CLIENTS; do
         echo "DATA "$i >> $FILE
-        $PGSQL_ROOT/bin/pgbench -c $i -j $i -T $TIME -U postgres pgbench >> $FILE
+        $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -T $TIME -U postgres pgbench >> $FILE
         echo "" >> $FILE
     done
     echo -n "1PC "$1"/"$2": " >> $DATE-$HEAD-wal.txt
-    $PGSQL_ROOT/bin/psql -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
+    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
 }
 
 function pgbench_1pc_prepared()
@@ -118,11 +123,11 @@ function pgbench_1pc_prepared()
     touch $FILE
     for i in $CLIENTS; do
         echo "DATA "$i >> $FILE
-        $PGSQL_ROOT/bin/pgbench -c $i -j $i -M prepared -T $TIME -U postgres pgbench >> $FILE
+        $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -M prepared -T $TIME -U postgres pgbench >> $FILE
         echo "" >> $FILE
     done
     echo -n "1PCP "$1"/"$2": " >> $DATE-$HEAD-wal.txt
-    $PGSQL_ROOT/bin/psql -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
+    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
 }
 
 function pgbench_readonly()
@@ -131,11 +136,11 @@ function pgbench_readonly()
     touch $FILE
     for i in $CLIENTS; do
         echo "DATA "$i >> $FILE
-        $PGSQL_ROOT/bin/pgbench -c $i -j $i -S -T $TIME -U postgres pgbench >> $FILE
+        $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -S -T $TIME -U postgres pgbench >> $FILE
         echo "" >> $FILE
     done
     echo -n "RO "$1"/"$2": " >> $DATE-$HEAD-wal.txt
-    $PGSQL_ROOT/bin/psql -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
+    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
 }
 
 function pgbench_2pc_standard()
@@ -144,11 +149,11 @@ function pgbench_2pc_standard()
     touch $FILE
     for i in $CLIENTS; do
         echo "DATA "$i >> $FILE
-        $PGSQL_ROOT/bin/pgbench -c $i -j $i -X -T $TIME -U postgres pgbench >> $FILE
+        $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -X -T $TIME -U postgres pgbench >> $FILE
         echo "" >> $FILE
     done
     echo -n "2PC "$1"/"$2": " >> $DATE-$HEAD-wal.txt
-    $PGSQL_ROOT/bin/psql -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
+    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
 }
 
 postgresql_stop
@@ -157,22 +162,28 @@ postgresql_compile
 touch $DATE-$HEAD-wal.txt
 
 # Off / Logged
-postgresql_configuration
-postgresql_start
-pgbench_init_logged
-pgbench_1pc_standard "off" "logged"
+if [ $RUN_ONEPC == 1 ]; then
+    postgresql_configuration
+    postgresql_start
+    pgbench_init_logged
+    pgbench_1pc_standard "off" "logged"
+fi
 
-postgresql_stop
-postgresql_configuration
-postgresql_start
-pgbench_init_logged
-pgbench_1pc_prepared "off" "logged"
+if [ $RUN_ONEPCP == 1 ]; then
+    postgresql_stop
+    postgresql_configuration
+    postgresql_start
+    pgbench_init_logged
+    pgbench_1pc_prepared "off" "logged"
+fi
 
-postgresql_stop
-postgresql_configuration
-postgresql_start
-pgbench_init_logged
-pgbench_readonly "off" "logged"
+if [ $RUN_RO == 1 ]; then
+    postgresql_stop
+    postgresql_configuration
+    postgresql_start
+    pgbench_init_logged
+    pgbench_readonly "off" "logged"
+fi
 
 if [ $RUN_TWOPC == 1 ]; then
     postgresql_stop
@@ -183,23 +194,29 @@ if [ $RUN_TWOPC == 1 ]; then
 fi
 
 # Off / Unlogged
-postgresql_stop
-postgresql_configuration
-postgresql_start
-pgbench_init_unlogged
-pgbench_1pc_standard "off" "unlogged"
+if [ $RUN_ONEPC == 1 ]; then
+    postgresql_stop
+    postgresql_configuration
+    postgresql_start
+    pgbench_init_unlogged
+    pgbench_1pc_standard "off" "unlogged"
+fi
 
-postgresql_stop
-postgresql_configuration
-postgresql_start
-pgbench_init_unlogged
-pgbench_1pc_prepared "off" "unlogged"
+if [ $RUN_ONEPCP == 1 ]; then
+    postgresql_stop
+    postgresql_configuration
+    postgresql_start
+    pgbench_init_unlogged
+    pgbench_1pc_prepared "off" "unlogged"
+fi
 
-postgresql_stop
-postgresql_configuration
-postgresql_start
-pgbench_init_unlogged
-pgbench_readonly "off" "unlogged"
+if [ $RUN_RO == 1 ]; then
+    postgresql_stop
+    postgresql_configuration
+    postgresql_start
+    pgbench_init_unlogged
+    pgbench_readonly "off" "unlogged"
+fi
 
 if [ $RUN_TWOPC == 1 ]; then
     postgresql_stop
@@ -210,26 +227,32 @@ if [ $RUN_TWOPC == 1 ]; then
 fi
 
 # On / Logged
-postgresql_stop
-postgresql_configuration
-postgresql_synchronous_commit
-postgresql_start
-pgbench_init_logged
-pgbench_1pc_standard "on" "logged"
+if [ $RUN_ONEPC == 1 ]; then
+    postgresql_stop
+    postgresql_configuration
+    postgresql_synchronous_commit
+    postgresql_start
+    pgbench_init_logged
+    pgbench_1pc_standard "on" "logged"
+fi
 
-postgresql_stop
-postgresql_configuration
-postgresql_synchronous_commit
-postgresql_start
-pgbench_init_logged
-pgbench_1pc_prepared "on" "logged"
+if [ $RUN_ONEPCP == 1 ]; then
+    postgresql_stop
+    postgresql_configuration
+    postgresql_synchronous_commit
+    postgresql_start
+    pgbench_init_logged
+    pgbench_1pc_prepared "on" "logged"
+fi
 
-postgresql_stop
-postgresql_configuration
-postgresql_synchronous_commit
-postgresql_start
-pgbench_init_logged
-pgbench_readonly "on" "logged"
+if [ $RUN_RO == 1 ]; then
+    postgresql_stop
+    postgresql_configuration
+    postgresql_synchronous_commit
+    postgresql_start
+    pgbench_init_logged
+    pgbench_readonly "on" "logged"
+fi
 
 if [ $RUN_TWOPC == 1 ]; then
     postgresql_stop
@@ -241,26 +264,32 @@ if [ $RUN_TWOPC == 1 ]; then
 fi
 
 # On / Unlogged
-postgresql_stop
-postgresql_configuration
-postgresql_synchronous_commit
-postgresql_start
-pgbench_init_unlogged
-pgbench_1pc_standard "on" "unlogged"
+if [ $RUN_ONEPC == 1 ]; then
+    postgresql_stop
+    postgresql_configuration
+    postgresql_synchronous_commit
+    postgresql_start
+    pgbench_init_unlogged
+    pgbench_1pc_standard "on" "unlogged"
+fi
 
-postgresql_stop
-postgresql_configuration
-postgresql_synchronous_commit
-postgresql_start
-pgbench_init_unlogged
-pgbench_1pc_prepared "on" "unlogged"
+if [ $RUN_ONEPCP == 1 ]; then
+    postgresql_stop
+    postgresql_configuration
+    postgresql_synchronous_commit
+    postgresql_start
+    pgbench_init_unlogged
+    pgbench_1pc_prepared "on" "unlogged"
+fi
 
-postgresql_stop
-postgresql_configuration
-postgresql_synchronous_commit
-postgresql_start
-pgbench_init_unlogged
-pgbench_readonly "on" "unlogged"
+if [ $RUN_RO == 1 ]; then
+    postgresql_stop
+    postgresql_configuration
+    postgresql_synchronous_commit
+    postgresql_start
+    pgbench_init_unlogged
+    pgbench_readonly "on" "unlogged"
+fi
 
 if [ $RUN_TWOPC == 1 ]; then
     postgresql_stop
