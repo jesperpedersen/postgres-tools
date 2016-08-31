@@ -18,8 +18,8 @@ This tool generates HTML reports about queries run against PostgreSQL.
 
 ```bash
 cd /path/to/work_area
-wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlparser/0.9.5/jsqlparser-0.9.5.jar
-/path/to/javac -classpath jsqlparser-0.9.5.jar QueryAnalyzer.java
+wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlparser/0.9.6/jsqlparser-0.9.6.jar
+/path/to/javac -classpath jsqlparser-0.9.6.jar QueryAnalyzer.java
 ```
 
 ### Download the PostgreSQL JDBC driver
@@ -32,7 +32,7 @@ Download from the [PostgreSQL JDBC](https://jdbc.postgresql.org/download.html) w
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:postgresql-9.4.1207.jar:jsqlparser-0.9.5.jar QueryAnalyzer
+/path/to/java -classpath .:postgresql-9.4.1207.jar:jsqlparser-0.9.6.jar QueryAnalyzer
 ```
 
 ## Configuration
@@ -104,4 +104,4 @@ Each report shows
 
 * The query
 * The executed query, if ```query``` contains ```?```
-* The ```EXPLAIN (ANALYZE, VERBOSE)``` plan
+* The ```EXPLAIN (ANALYZE, VERBOSE, BUFFERS ON)``` plan

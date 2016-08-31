@@ -36,8 +36,8 @@ import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -48,14 +48,17 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import net.sf.jsqlparser.expression.JdbcParameter;
+import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.delete.Delete;
+import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.Limit;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.update.Update;
+import net.sf.jsqlparser.util.TablesNamesFinder;
 import net.sf.jsqlparser.util.deparser.ExpressionDeParser;
 import net.sf.jsqlparser.util.deparser.SelectDeParser;
 
@@ -68,8 +71,8 @@ public class QueryAnalyzer
    /** Default configuration */
    private static final String DEFAULT_CONFIGURATION = "queryanalyzer.properties";
    
-   /** EXPLAIN (ANALYZE, VERBOSE) */
-   private static final String EXPLAIN_ANALYZE_VERBOSE = "EXPLAIN (ANALYZE, VERBOSE)";
+   /** EXPLAIN (ANALYZE, VERBOSE, BUFFERS ON) */
+   private static final String EXPLAIN_ANALYZE_VERBOSE_BUFFERS = "EXPLAIN (ANALYZE, VERBOSE, BUFFERS ON)";
 
    /** The configuration */
    private static Properties configuration;
@@ -77,23 +80,47 @@ public class QueryAnalyzer
    /** Plan count */
    private static int planCount;
 
-   /** Data:          Table       Column  Value */        
-   private static Map<String, Map<String, Object>> data = new HashMap<>();
-   
-   /** Aliases:       Alias   Name */
-   private static Map<String, String> aliases = new HashMap<>();
+   /** Output debug information */
+   private static boolean debug;
 
    /** Current table name */
    private static String currentTableName = null;
 
+   /** Saw an IN expression */
+   private static boolean sawIn = false;
+
+   /** IN expression column */
+   private static String inExpressionColumn = null;
+
+   /** Data:          Table       Column  Value */        
+   private static Map<String, Map<String, Object>> data = new TreeMap<>();
+   
+   /** Aliases:       Alias   Name */
+   private static Map<String, String> aliases = new TreeMap<>();
+
+   /** Planner time:  Query   Time */
+   private static Map<String, Double> plannerTimes = new TreeMap<>();
+
+   /** Executor time: Query   Time */
+   private static Map<String, Double> executorTimes = new TreeMap<>();
+
    /** Tables:        Name        Column  Type */
-   private static Map<String, Map<String, Integer>> tables = new HashMap<>();
+   private static Map<String, Map<String, Integer>> tables = new TreeMap<>();
    
    /** Indexes:       Table       Index   Columns */
-   private static Map<String, Map<String, Set<String>>> indexes = new HashMap<>();
+   private static Map<String, Map<String, Set<String>>> indexes = new TreeMap<>();
    
    /** Primary key:   Table   Columns */
-   private static Map<String, Set<String>> primaryKeys = new HashMap<>();
+   private static Map<String, Set<String>> primaryKeys = new TreeMap<>();
+
+   /** ON/IN usage:   Table       Query   Columns */
+   private static Map<String, Map<String, Set<String>>> on = new TreeMap<>();
+
+   /** WHERE usage:   Table       Query   Columns */
+   private static Map<String, Map<String, List<String>>> where = new TreeMap<>();
+
+   /** SET usage:     Table   Columns */
+   private static Map<String, Set<String>> set = new TreeMap<>();
    
    /**
     * Write data to a file
@@ -118,9 +145,9 @@ public class QueryAnalyzer
 
    /**
     * Write index.html
-    * @parma queryData The query data
+    * @parma queryIds The query identifiers
     */
-   private static void writeIndex(SortedMap<String, String> queryData) throws Exception
+   private static void writeIndex(SortedSet<String> queryIds) throws Exception
    {
       List<String> l = new ArrayList<>();
 
@@ -136,12 +163,33 @@ public class QueryAnalyzer
       l.add("<h1>Query Analysis</h1>");
       l.add("");
 
+      if (configuration.getProperty("url") != null)
+      {
+         l.add("Ran against \'" + configuration.getProperty("url") + "\' on " + new java.util.Date());
+      }
+      else
+      {
+         l.add("Ran against \'" +
+               configuration.getProperty("host", "localhost") + ":" +
+               Integer.valueOf(configuration.getProperty("port", "5432")) + "/" +
+               configuration.getProperty("database") + "\' on " + new java.util.Date());
+      }
+      l.add("<p>");
+
+      l.add("<h2>Overview</h2>");
+      l.add("<ul>");
+      l.add("<li><a href=\"tables.html\">Tables</a></li>");
+      l.add("<li><a href=\"result.csv\">Times</a></li>");
+      l.add("</ul>");
+      l.add("<p>");
+      
       l.add("<h2>Queries</h2>");
       l.add("<ul>");
-      for (String q : queryData.keySet())
+      for (String q : queryIds)
       {
          l.add("<li><a href=\"" + q + ".html\">" + q +"</a>" +
-               (!"".equals(queryData.get(q)) ? " (" + queryData.get(q) + ") " : "") + "</li>");
+               (plannerTimes.get(q) != null ? " (" + plannerTimes.get(q) + "ms / " + executorTimes.get(q) + "ms)" : "") +
+               "</li>");
       }
       l.add("</ul>");
       
@@ -149,6 +197,170 @@ public class QueryAnalyzer
       l.add("</html>");
 
       writeFile(Paths.get("report", "index.html"), l);
+   }
+
+   /**
+    * Write tables.html
+    */
+   private static void writeTables() throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
+      l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+      l.add("");
+      l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
+      l.add("<head>");
+      l.add("  <title>Table analysis</title>");
+      l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+      l.add("</head>");
+      l.add("<body>");
+      l.add("<h1>Table analysis</h1>");
+      l.add("");
+
+      for (String tableName : tables.keySet())
+      {
+         l.add("<h2>" + tableName + "</h2>");
+
+         Map<String, Integer> tableData = tables.get(tableName);
+         Set<String> pkInfo = primaryKeys.get(tableName);
+
+         l.add("<table>");
+         for (String columnName : tableData.keySet())
+         {
+            l.add("<tr>");
+            if (pkInfo.contains(columnName))
+            {
+               l.add("<td><b>" + columnName + "</b></td>");
+               l.add("<td><b>" + getTypeName(tableData.get(columnName)) + "</b></td>");
+            }
+            else
+            {
+               l.add("<td>" + columnName + "</td>");
+               l.add("<td>" + getTypeName(tableData.get(columnName)) + "</td>");
+            }
+            l.add("</tr>");
+         }
+         l.add("</table>");
+
+         l.add("<p>");
+         l.add("<u><b>Primary key</b></u>");
+         if (pkInfo.size() > 0)
+         {
+            l.add("<table>");
+            for (String columnName : pkInfo)
+            {
+               l.add("<tr>");
+               l.add("<td><b>" + columnName + "</b></td>");
+               l.add("<td><b>" + getTypeName(tableData.get(columnName)) + "</b></td>");
+               l.add("</tr>");
+            }
+            l.add("</table>");
+         }
+         else
+         {
+            l.add("<p>");
+            l.add("None");
+         }
+         
+         Map<String, Set<String>> indexData = indexes.get(tableName);
+         l.add("<p>");
+         l.add("<u><b>Indexes</b></u>");
+         if (indexData.size() > 0)
+         {
+            l.add("<table>");
+            for (String indexName : indexData.keySet())
+            {
+               l.add("<tr>");
+               if (indexData.get(indexName).equals(pkInfo))
+               {
+                  l.add("<td><b>" + indexName + "</b></td>");
+                  l.add("<td><b>" + indexData.get(indexName) + "</b></td>");
+               }
+               else
+               {
+                  l.add("<td>" + indexName + "</td>");
+                  l.add("<td>" + indexData.get(indexName) + "</td>");
+               }
+               l.add("</tr>");
+            }
+            l.add("</table>");
+         }
+         else
+         {
+            l.add("<p>");
+            l.add("None");
+         }
+
+         Map<String, Set<String>> tableOn = on.get(tableName);
+         Map<String, List<String>> tableWhere = where.get(tableName);
+         Set<String> tableSet = set.get(tableName);
+
+         for (String alias : aliases.keySet())
+         {
+            String t = aliases.get(alias);
+            if (tableName.equals(t))
+            {
+               Map<String, Set<String>> extra = on.get(alias);
+               if (extra != null)
+               {
+                  if (tableOn == null)
+                     tableOn = new TreeMap<>();
+
+                  tableOn.putAll(extra);
+               }
+            }
+         }
+         
+         if (tableWhere != null || tableOn != null)
+         {
+            l.add("<p>");
+            l.add("<u><b>Suggestions</b></u>");
+
+            l.addAll(suggestionPrimaryKey(tableData, pkInfo, tableOn, tableWhere, tableSet));
+            l.addAll(suggestionIndexes(tableOn, tableWhere, tableSet));
+         }
+
+         if (debug && (tableWhere != null || tableOn != null))
+         {
+            l.add("<h3>DEBUG</h3>");
+
+            if (tableOn != null)
+            {
+               l.add("<p>");
+               l.add("<u><b>ON</b></u>");
+               l.add("<pre>");
+               l.add(tableOn.toString());
+               l.add("</pre>");
+            }
+
+            if (tableWhere != null)
+            {
+               l.add("<p>");
+               l.add("<u><b>WHERE</b></u>");
+               l.add("<pre>");
+               l.add(tableWhere.toString());
+               l.add("</pre>");
+            }
+
+            if (tableSet != null)
+            {
+               l.add("<p>");
+               l.add("<u><b>SET</b></u>");
+               l.add("<pre>");
+               l.add(set.get(tableName).toString());
+               l.add("</pre>");
+            }
+         }
+      }
+
+      l.add("<p>");
+      l.add("<a href=\"index.html\">Back</a>");
+      
+      l.add("</body>");
+      l.add("</html>");
+
+      writeFile(Paths.get("report", "tables.html"), l);
    }
 
    /**
@@ -234,7 +446,7 @@ public class QueryAnalyzer
       {
          Map<String, Set<String>> indexData = indexes.get(tableName);
          Set<String> pkInfo = primaryKeys.get(tableName);
-         if (indexData != null)
+         if (indexData.size() > 0)
          {
             l.add("<h3>" + tableName + "</h3>");
             l.add("<table>");
@@ -257,7 +469,7 @@ public class QueryAnalyzer
          }
       }
       
-      l.add("");
+      l.add("<p>");
       l.add("<a href=\"index.html\">Back</a>");
       
       l.add("</body>");
@@ -267,14 +479,27 @@ public class QueryAnalyzer
    }
 
    /**
+    * Write result.csv
+    */
+   private static void writeCSV() throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      for (String q : plannerTimes.keySet())
+      {
+         l.add(q + "," + plannerTimes.get(q) + "," + executorTimes.get(q));
+      }
+
+      writeFile(Paths.get("report", "result.csv"), l);
+   }
+
+   /**
     * Process the queries
     * @param c The connection
     * @return The query identifiers
     */
-   private static SortedMap<String, String> processQueries(Connection c) throws Exception
+   private static SortedSet<String> processQueries(Connection c) throws Exception
    {
-      SortedMap<String, String> result = new TreeMap<>();
-
       SortedSet<String> keys = new TreeSet<>();
       for (String key : configuration.stringPropertyNames())
       {
@@ -287,19 +512,18 @@ public class QueryAnalyzer
          String origQuery = configuration.getProperty(key);
          String query = origQuery;
          String plan = "";
-         String planData = "";
-         
+
          try
          {
             if (query.indexOf("?") != -1)
-               query = rewriteQuery(c, query);
+               query = rewriteQuery(c, key, query);
 
             if (query != null)
             {
                for (int i = 0; i < planCount; i++)
-                  executeStatement(c, EXPLAIN_ANALYZE_VERBOSE + " " + query, false);
+                  executeStatement(c, EXPLAIN_ANALYZE_VERBOSE_BUFFERS + " " + query, false);
                   
-               List<String> l = executeStatement(c, EXPLAIN_ANALYZE_VERBOSE + " " + query);
+               List<String> l = executeStatement(c, EXPLAIN_ANALYZE_VERBOSE_BUFFERS + " " + query);
                for (String s : l)
                {
                   plan += s;
@@ -307,12 +531,13 @@ public class QueryAnalyzer
 
                   if (s.startsWith("Planning time:"))
                   {
-                     planData += s.substring(15);
-                     planData += " / ";
+                     int index = s.indexOf(" ", 15);
+                     plannerTimes.put(key, Double.valueOf(s.substring(15, index)));
                   }
                   else if (s.startsWith("Execution time:"))
                   {
-                     planData += s.substring(16);
+                     int index = s.indexOf(" ", 16);
+                     executorTimes.put(key, Double.valueOf(s.substring(16, index)));
                   }
                }
             }
@@ -320,7 +545,6 @@ public class QueryAnalyzer
             Set<String> usedTables = getUsedTables(c, origQuery);
             
             writeReport(key, origQuery, query, usedTables, plan);
-            result.put(key, planData);
          }
          catch (Exception e)
          {
@@ -330,22 +554,147 @@ public class QueryAnalyzer
          }
       }
 
-      return result;
+      return keys;
    }
 
    /**
+    * Suggestion: Primary key
+    * @param tableData The data types of the table
+    * @param pkInfo The primary key of the table
+    * @param tableOn The columns accessed in ON per query
+    * @param tableWhere The columns accessed in WHERE per query
+    * @param tableSet The columns accessed in SET
+    * @return The report data
+    */
+   private static List<String> suggestionPrimaryKey(Map<String, Integer> tableData,
+                                                    Set<String> pkInfo,
+                                                    Map<String, Set<String>> tableOn,
+                                                    Map<String, List<String>> tableWhere,
+                                                    Set<String> tableSet)
+   {
+      List<String> result = new ArrayList<>();
+
+      SortedSet<String> pkColumns = new TreeSet<>();
+
+      if (tableOn != null)
+         for (Set<String> s : tableOn.values())
+            pkColumns.addAll(s);
+
+      if (tableWhere != null)
+         for (List<String> l : tableWhere.values())
+            pkColumns.addAll(l);
+      
+      if (tableSet != null)
+         pkColumns.removeAll(tableSet);
+
+      if (pkColumns.size() > 0 && tableData != null)
+      {
+         result.add("<p>");
+         result.add("<b><u>Primary key</u></b>");
+         result.add("<table>");
+         
+         for (String columnName : pkColumns)
+         {
+            result.add("<tr>");
+            result.add("<td><b>" + columnName + "</b></td>");
+            result.add("<td><b>" + getTypeName(tableData.get(columnName)) + "</b></td>");
+            result.add("</tr>");
+         }
+
+         result.add("</table>");
+         result.add("<p>");
+
+         if (pkColumns.equals(pkInfo))
+         {
+            result.add("Current primary key equal: <b>Yes</b>");
+         }
+         else
+         {
+            result.add("Current primary key equal: <b>No</b>");
+         }
+      }
+
+      return result;
+   }
+   
+   /**
+    * Suggestion: Indexes
+    * @param tableOn The columns accessed in ON per query
+    * @param tableWhere The columns accessed in WHERE per query
+    * @param tableSet The columns accessed in SET
+    * @return The report data
+    */
+   private static List<String> suggestionIndexes(Map<String, Set<String>> tableOn,
+                                                 Map<String, List<String>> tableWhere,
+                                                 Set<String> tableSet)
+   {
+      List<String> result = new ArrayList<>();
+      Set<String> suggested = new HashSet<>();
+
+      result.add("<p>");
+      result.add("<b><u>Indexes</u></b>");
+      result.add("<table>");
+
+      int idx = 1;
+
+      if (tableOn != null)
+      {
+         for (Set<String> s : tableOn.values())
+         {
+            for (String columnName : s)
+            {
+               if (!suggested.contains(columnName))
+               {
+                  result.add("<tr>");
+                  result.add("<td>IDX" + idx + "</td>");
+                  result.add("<td>" + columnName + "</td>");
+                  result.add("</tr>");
+                  suggested.add(columnName);
+                  idx++;
+               }
+            }
+         }
+      }
+
+      if (tableWhere != null)
+      {
+         for (List<String> l : tableWhere.values())
+         {
+            String columnName = l.get(0);
+
+            if (!suggested.contains(columnName))
+            {
+               result.add("<tr>");
+               result.add("<td>IDX" + idx + "</td>");
+               result.add("<td>" + columnName + "</td>");
+               result.add("</tr>");
+               suggested.add(columnName);
+               idx++;
+            }
+         }
+      }
+
+      result.add("</table>");
+
+      return result;
+   }
+   
+   /**
     * Rewrite the query
     * @param c The connection
+    * @param queryId The query id
     * @param query The query
     * @return The new query
     */
-   private static String rewriteQuery(Connection c, String query) throws Exception
+   private static String rewriteQuery(Connection c, String queryId, String query) throws Exception
    {
       net.sf.jsqlparser.statement.Statement s = CCJSqlParserUtil.parse(query);
       
       if (s instanceof Select)
       {
          Select select = (Select)s;
+         Map<String, Set<String>> extraIndexes = new TreeMap<>();
+         sawIn = false;
          
          StringBuilder buffer = new StringBuilder();
          ExpressionDeParser expressionDeParser = new ExpressionDeParser()
@@ -362,6 +711,9 @@ public class QueryAnalyzer
             @Override
             public void visit(JdbcParameter jdbcParameter)
             {
+               if (sawIn)
+                  return;
+
                try
                {
                   this.getBuffer().append(getData(c, currentColumn));
@@ -393,6 +745,85 @@ public class QueryAnalyzer
          {
             PlainSelect plainSelect = (PlainSelect)select.getSelectBody();
 
+            ExpressionDeParser extraIndexExpressionDeParser = new ExpressionDeParser()
+            {
+               @Override
+               public void visit(Column column)
+               {
+                  String tableName = null;
+                  if (column.getTable() != null)
+                     tableName = column.getTable().getName();
+
+                  if (tableName == null)
+                  {
+                     List<String> tables = new TablesNamesFinder().getTableList(s);
+                     if (tables != null && tables.size() == 1)
+                        tableName = tables.get(0);
+                  }
+                  
+                  if (tableName != null)
+                  {
+                     Set<String> cols = extraIndexes.get(tableName);
+                     if (cols == null)
+                        cols = new HashSet<>();
+                  
+                     cols.add(column.getColumnName());
+                     extraIndexes.put(tableName, cols);
+                  }
+               }
+
+               @Override
+               public void visit(InExpression inExpression)
+               {
+                  sawIn = true;
+                  inExpressionColumn = null;
+
+                  ExpressionDeParser inExpressionDeParser = new ExpressionDeParser()
+                  {
+                     @Override
+                     public void visit(Column column)
+                     {
+                        inExpressionColumn = column.getColumnName().toLowerCase();
+                     }
+                  };
+
+                  inExpression.getLeftExpression().accept(inExpressionDeParser);
+
+                  String tableName = null;
+                  List<String> tables = new TablesNamesFinder().getTableList(s);
+                  if (tables != null && tables.size() == 1)
+                     tableName = tables.get(0);
+                  
+                  if (tableName != null && inExpressionColumn != null)
+                  {
+                     Map<String, Set<String>> m = on.get(tableName);
+                     if (m == null)
+                        m = new TreeMap<>();
+
+                     Set<String> s = m.get(queryId);
+                     if (s == null)
+                        s = new TreeSet<>();
+                  
+                     s.add(inExpressionColumn.toLowerCase());
+                     m.put(queryId, s);
+                     on.put(tableName, m);
+                  }
+               }
+            };
+
+            if (plainSelect.getJoins() != null)
+            {
+               for (Join join : plainSelect.getJoins())
+               {
+                  join.getOnExpression().accept(new JoinVisitor(queryId, s));
+               }
+            }
+            
+            if (plainSelect.getWhere() != null)
+            {
+               plainSelect.getWhere().accept(extraIndexExpressionDeParser);
+            }
+            
             if (plainSelect.getLimit() != null)
             {
                Limit limit = new Limit();
@@ -404,8 +835,31 @@ public class QueryAnalyzer
          }
 
          select.getSelectBody().accept(deparser);
-         
-         return buffer.toString();
+
+         for (String tableName : extraIndexes.keySet())
+         {
+            Set<String> values = extraIndexes.get(tableName);
+            
+            if (aliases.containsKey(tableName))
+               tableName = aliases.get(tableName);
+
+            Map<String, List<String>> m = where.get(tableName);
+            if (m == null)
+               m = new TreeMap<>();
+
+            List<String> l = m.get(queryId);
+            if (l == null)
+               l = new ArrayList<>();
+
+            for (String col : values)
+               l.add(col.toLowerCase());
+
+            m.put(queryId, l);
+            where.put(tableName, m);
+         }
+
+         if (!sawIn)
+            return buffer.toString();
       }
       else if (s instanceof Update)
       {
@@ -420,13 +874,44 @@ public class QueryAnalyzer
          StringBuilder buffer = new StringBuilder();
          ExpressionDeParser expressionDeParser = new ExpressionDeParser()
          {
-            private int index = 0;
             private Column currentColumn = null;
             
             @Override
             public void visit(Column column)
             {
                currentColumn = column;
+
+               boolean isSET = false;
+               for (Column c : update.getColumns())
+               {
+                  if (c.getColumnName().equals(column.getColumnName()))
+                     isSET = true;
+               }
+
+               if (isSET)
+               {
+                  Set<String> s = set.get(currentTableName);
+                  if (s == null)
+                     s = new TreeSet<>();
+
+                  s.add(column.getColumnName().toLowerCase());
+                  set.put(currentTableName, s);
+               }
+               else
+               {
+                  Map<String, List<String>> m = where.get(currentTableName);
+                  if (m == null)
+                     m = new TreeMap<>();
+
+                  List<String> l = m.get(queryId);
+                  if (l == null)
+                     l = new ArrayList<>();
+
+                  l.add(column.getColumnName().toLowerCase());
+                  m.put(queryId, l);
+                  where.put(currentTableName, m);
+               }
+
                this.getBuffer().append(column);
             }
 
@@ -435,19 +920,7 @@ public class QueryAnalyzer
             {
                try
                {
-                  // Remove hack after 0.9.6 is out
-                  boolean override = false;
-                  if (currentColumn == null)
-                  {
-                     currentColumn = update.getColumns().get(index);
-                     override = true;
-                     index++;
-                  }
-                  
                   this.getBuffer().append(getData(c, currentColumn));
-
-                  if (override)
-                     currentColumn = null;
                }
                catch (Exception e)
                {
@@ -492,7 +965,8 @@ public class QueryAnalyzer
       else if (s instanceof Delete)
       {
          Delete delete = (Delete)s;
-
+         sawIn = false;
+         
          initTableData(c, delete.getTable().getName());
          currentTableName = delete.getTable().getName();
 
@@ -506,6 +980,19 @@ public class QueryAnalyzer
             public void visit(Column column)
             {
                currentColumn = column;
+
+               Map<String, List<String>> m = where.get(currentTableName);
+               if (m == null)
+                  m = new TreeMap<>();
+
+               List<String> l = m.get(queryId);
+               if (l == null)
+                  l = new ArrayList<>();
+
+               l.add(column.getColumnName().toLowerCase());
+               m.put(queryId, l);
+               where.put(currentTableName, m);
+
                this.getBuffer().append(column);
             }
 
@@ -519,6 +1006,39 @@ public class QueryAnalyzer
                catch (Exception e)
                {
                   e.printStackTrace();
+               }
+            }
+
+            @Override
+            public void visit(InExpression inExpression)
+            {
+               sawIn = true;
+               inExpressionColumn = null;
+
+               ExpressionDeParser inExpressionDeParser = new ExpressionDeParser()
+               {
+                  @Override
+                  public void visit(Column column)
+                  {
+                     inExpressionColumn = column.getColumnName().toLowerCase();
+                  }
+               };
+
+               inExpression.getLeftExpression().accept(inExpressionDeParser);
+
+               if (currentTableName != null && inExpressionColumn != null)
+               {
+                  Map<String, List<String>> m = where.get(currentTableName);
+                  if (m == null)
+                     m = new TreeMap<>();
+
+                  List<String> l = m.get(queryId);
+                  if (l == null)
+                     l = new ArrayList<>();
+
+                  l.add(inExpressionColumn.toLowerCase());
+                  m.put(queryId, l);
+                  where.put(currentTableName, m);
                }
             }
          };
@@ -538,8 +1058,9 @@ public class QueryAnalyzer
          };
          
          delete.accept(statementDeParser);
-         
-         return buffer.toString();
+
+         if (!sawIn)
+            return buffer.toString();
       }
 
       System.out.println("Unsupported query: " + s);
@@ -556,7 +1077,7 @@ public class QueryAnalyzer
    {
       String tableName = column.getTable().getName();
 
-      if (aliases.containsKey(tableName))
+      if (tableName != null && aliases.containsKey(tableName))
          tableName = aliases.get(tableName);
 
       if (tableName == null)
@@ -583,7 +1104,7 @@ public class QueryAnalyzer
     */
    private static Map<String, Object> initTableData(Connection c, String tableName) throws Exception
    {
-      Map<String, Object> values = new HashMap<>();
+      Map<String, Object> values = new TreeMap<>();
 
       Statement stmt = null;
       ResultSet rs = null;
@@ -593,17 +1114,19 @@ public class QueryAnalyzer
          stmt = c.createStatement();
          stmt.execute(query);
          rs = stmt.getResultSet();
-         rs.next();
-            
-         ResultSetMetaData rsmd = rs.getMetaData();
 
-         for (int i = 1; i <= rsmd.getColumnCount(); i++)
+         if (rs.next())
          {
-            String columnName = rsmd.getColumnName(i);
-            int columnType = rsmd.getColumnType(i);
+            ResultSetMetaData rsmd = rs.getMetaData();
 
-            columnName = columnName.toUpperCase();
-            values.put(columnName, getResultSetValue(rs, i, columnType));
+            for (int i = 1; i <= rsmd.getColumnCount(); i++)
+            {
+               String columnName = rsmd.getColumnName(i);
+               int columnType = rsmd.getColumnType(i);
+
+               columnName = columnName.toUpperCase();
+               values.put(columnName, getResultSetValue(rs, i, columnType));
+            }
          }
 
          data.put(tableName, values);
@@ -805,8 +1328,12 @@ public class QueryAnalyzer
       List<String> result = new ArrayList<>();
       Statement stmt = null;
       ResultSet rs = null;
+      boolean autoCommit = true;
       try
       {
+         autoCommit = c.getAutoCommit();
+         c.setAutoCommit(false);
+
          stmt = c.createStatement();
          stmt.execute(s);
 
@@ -839,6 +1366,8 @@ public class QueryAnalyzer
                result.add(sb.toString());
             }
          }
+
+         c.rollback();
          
          return result;
       }
@@ -871,6 +1400,14 @@ public class QueryAnalyzer
                // Nothing to do
             }
          }
+         try
+         {
+            c.setAutoCommit(autoCommit);
+         }
+         catch (Exception e)
+         {
+            // Nothing to do
+         }
       }
    }
 
@@ -885,81 +1422,13 @@ public class QueryAnalyzer
       Set<String> result = new HashSet<>();
 
       net.sf.jsqlparser.statement.Statement s = CCJSqlParserUtil.parse(query);
+      result.addAll(new TablesNamesFinder().getTableList(s));
       
-      if (s instanceof Select)
-      {
-         Select select = (Select)s;
-
-         StringBuilder buffer = new StringBuilder();
-         ExpressionDeParser expressionDeParser = new ExpressionDeParser()
-         {
-         };
-
-         SelectDeParser deparser = new SelectDeParser(expressionDeParser, buffer)
-         {
-            @Override
-            public void visit(Table table)
-            {
-               result.add(table.getName());
-            }
-         };
-         expressionDeParser.setSelectVisitor(deparser);
-         expressionDeParser.setBuffer(buffer);
-
-         select.getSelectBody().accept(deparser);
-      }
-      else if (s instanceof Update)
-      {
-         Update update = (Update)s;
-
-         for (Table table : update.getTables())
-         {
-            result.add(table.getName());
-         }
-
-         StringBuilder buffer = new StringBuilder();
-         ExpressionDeParser expressionDeParser = new ExpressionDeParser()
-         {
-         };
-
-         SelectDeParser selectDeParser = new SelectDeParser()
-         {
-            @Override
-            public void visit(Table table)
-            {
-               result.add(table.getName());
-            }
-         };
-         expressionDeParser.setSelectVisitor(selectDeParser);
-         expressionDeParser.setBuffer(buffer);
-
-         net.sf.jsqlparser.util.deparser.UpdateDeParser updateDeParser =
-            new net.sf.jsqlparser.util.deparser.UpdateDeParser(expressionDeParser, selectDeParser, buffer);
-
-         net.sf.jsqlparser.util.deparser.StatementDeParser statementDeParser =
-            new net.sf.jsqlparser.util.deparser.StatementDeParser(buffer)
-         {
-            @Override
-            public void visit(Update update)
-            {
-               updateDeParser.deParse(update);
-            }
-         };
-         
-         update.accept(statementDeParser);
-      }
-      else if (s instanceof Delete)
-      {
-         Delete delete = (Delete)s;
-
-         result.add(delete.getTable().getName());
-      }
-
       for (String tableName : result)
       {
          if (!tables.containsKey(tableName))
          {
-            Map<String, Integer> tableData = new HashMap<>();
+            Map<String, Integer> tableData = new TreeMap<>();
             ResultSet rs = null;
             try
             {
@@ -1031,7 +1500,7 @@ public class QueryAnalyzer
             try
             {
                DatabaseMetaData dmd = c.getMetaData();
-               Set<String> pkInfo = new HashSet<>();
+               Set<String> pkInfo = new TreeSet<>();
 
                rs = dmd.getPrimaryKeys(null, null, tableName.toLowerCase());
                while (rs.next())
@@ -1172,11 +1641,14 @@ public class QueryAnalyzer
          }
 
          planCount = Integer.valueOf(configuration.getProperty("plan_count", "5"));
+         debug = Boolean.valueOf(configuration.getProperty("debug", "false"));
          
          c = DriverManager.getConnection(url, user, password);
 
-         SortedMap<String, String> queries = processQueries(c);
+         SortedSet<String> queries = processQueries(c);
          writeIndex(queries);
+         writeTables();
+         writeCSV();
       }
       catch (Exception e)
       {
@@ -1194,6 +1666,55 @@ public class QueryAnalyzer
             {
                // Nothing to do
             }
+         }
+      }
+   }
+
+   /**
+    * JOIN visitor
+    */
+   static class JoinVisitor extends ExpressionDeParser
+   {
+      private String queryId;
+      private net.sf.jsqlparser.statement.Statement statement;
+      
+      JoinVisitor(String queryId, net.sf.jsqlparser.statement.Statement statement)
+      {
+         this.queryId = queryId;
+         this.statement = statement;
+      }
+
+      @Override
+      public void visit(Column column)
+      {
+         String tableName = null;
+         if (column.getTable() != null)
+            tableName = column.getTable().getName();
+
+         if (tableName == null)
+         {
+            List<String> tables = new TablesNamesFinder().getTableList(statement);
+            if (tables != null && tables.size() == 1)
+               tableName = tables.get(0);
+         }
+
+         if (tableName != null)
+            if (aliases.containsKey(tableName))
+               tableName = aliases.get(tableName);
+         
+         if (tableName != null)
+         {
+            Map<String, Set<String>> m = on.get(tableName);
+            if (m == null)
+               m = new TreeMap<>();
+            
+            Set<String> cols = m.get(queryId);
+            if (cols == null)
+               cols = new TreeSet<>();
+
+            cols.add(column.getColumnName());
+            m.put(queryId, cols);
+            on.put(tableName, m);
          }
       }
    }
