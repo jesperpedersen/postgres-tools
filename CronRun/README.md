@@ -80,6 +80,14 @@ The perf.sh scripts contains the following configuration options
 
 The list of client counts for the run
 
+### HOST
+
+The name of the host
+
+### PORT
+
+The port used
+
 ### SCALE
 
 The scale factor for pgbench
@@ -134,7 +142,8 @@ Shows the graphs for the daily run as well as
 * Environment
 * Configuration
 * WAL information
-* Note for the run
+* Note for the run (loaded from notes.properties)
+* If a run should be ignored (loaded from ignores.properties)
 
 ### Profile reports
 

@@ -130,6 +130,9 @@ public class GenerateReports
    //                   Date=Note
    private static final Properties notes = new Properties();
 
+   //                   Date=Note
+   private static final Properties ignores = new Properties();
+
    /**
     * Get the date from the file name
     * @param f The file
@@ -220,6 +223,7 @@ public class GenerateReports
     * - 2: Change in environment
     * - 3: Change in both
     * - 4: Note
+    * - 5: Ignore
     */
    private static void processChanges()
    {
@@ -233,14 +237,20 @@ public class GenerateReports
 
          if (previousConfiguraton == null)
          {
-            if (notes.getProperty(date) != null)
+            if (ignores.getProperty(date) != null)
+               changes.put(date, Integer.valueOf(5));
+            else if (notes.getProperty(date) != null)
                changes.put(date, Integer.valueOf(4));
             else
                changes.put(date, Integer.valueOf(0));
          }
          else
          {
-            if (notes.getProperty(date) != null)
+            if (ignores.getProperty(date) != null)
+            {
+               changes.put(date, Integer.valueOf(5));
+            }
+            else if (notes.getProperty(date) != null)
             {
                changes.put(date, Integer.valueOf(4));
             }
@@ -512,7 +522,12 @@ public class GenerateReports
          l.add("</pre>");
       }
 
-      if (notes.getProperty(date) != null)
+      if (ignores.getProperty(date) != null)
+      {
+         l.add("<h2>Ignore</h2>");
+         l.add(ignores.getProperty(date));
+      }
+      else if (notes.getProperty(date) != null)
       {
          l.add("<h2>Note</h2>");
          l.add(notes.getProperty(date));
@@ -610,6 +625,10 @@ public class GenerateReports
          else if (change.intValue() == 4)
          {
             sb.append(" (Note)");
+         }
+         else if (change.intValue() == 5)
+         {
+            sb.append(" (Ignore)");
          }
          
          sb.append("</li>");
@@ -741,6 +760,14 @@ public class GenerateReports
       l.add("                           canvas.fillRect(canvas_left_x, area.y, canvas_width, area.h);");
       l.add("                         }");
       l.add("");
+      l.add("                         function highlight_ignore(x_start, x_end) {");
+      l.add("                           var canvas_left_x = g.toDomXCoord(x_start);");
+      l.add("                           var canvas_right_x = g.toDomXCoord(x_end);");
+      l.add("                           var canvas_width = canvas_right_x - canvas_left_x;");
+      l.add("                           canvas.fillStyle = \"rgba(0, 0, 0, 1.0)\";");
+      l.add("                           canvas.fillRect(canvas_left_x, area.y, canvas_width, area.h);");
+      l.add("                         }");
+      l.add("");
       l.add("                         var min_data_x = g.getValue(0,0);");
       l.add("                         var max_data_x = g.getValue(g.numRows()-1,0);");
       l.add("                         var w = min_data_x;");
@@ -750,8 +777,12 @@ public class GenerateReports
       l.add("                               highlight_environment(w, w + 12*3600*1000);");
       l.add("                            else if (changes[0] == 2)");
       l.add("                               highlight_configuration(w, w + 12*3600*1000);");
-      l.add("                            else");
+      l.add("                            else if (changes[0] == 3)");
       l.add("                               highlight_both(w, w + 12*3600*1000);");
+      l.add("                            else if (changes[0] == 4)");
+      l.add("                               highlight_note(w, w + 12*3600*1000);");
+      l.add("                            else");
+      l.add("                               highlight_ignore(w, w + 12*3600*1000);");
       l.add("                         }");
       l.add("");
       l.add("                         w += 12*3600*1000;");
@@ -776,8 +807,10 @@ public class GenerateReports
       l.add("                                  highlight_configuration(start_x_highlight,end_x_highlight);");
       l.add("                               else if (changes[counter] == 3)");
       l.add("                                  highlight_both(start_x_highlight,end_x_highlight);");
-      l.add("                               else");
+      l.add("                               else if (changes[counter] == 4)");
       l.add("                                  highlight_note(start_x_highlight,end_x_highlight);");
+      l.add("                               else");
+      l.add("                                  highlight_ignore(start_x_highlight,end_x_highlight);");
       l.add("                            }");
       l.add("");
       l.add("                            w += 24*3600*1000;");
@@ -1243,6 +1276,10 @@ public class GenerateReports
       l.add("<td>Note</td>");
       l.add("</tr>");
       l.add("<tr>");
+      l.add("<td><b>Black</b></td>");
+      l.add("<td>Ignore</td>");
+      l.add("</tr>");
+      l.add("<tr>");
       l.add("<td><b>Off</b></td>");
       l.add("<td>synchronous_commit = off</td>");
       l.add("</tr>");
@@ -1350,6 +1387,38 @@ public class GenerateReports
    }
 
    /**
+    * Load the ignores for the runs (ignores.properties)
+    */
+   private static void loadIgnores() throws Exception
+   {
+      File f = new File("ignores.properties");
+
+      if (f.exists())
+      {
+         FileInputStream fis = null;
+         try
+         {
+            fis = new FileInputStream(f);
+            ignores.load(fis);
+         }
+         finally
+         {
+            if (fis != null)
+            {
+               try
+               {
+                  fis.close();
+               }
+               catch (Exception e)
+               {
+                  // Nothing todo
+               }
+            }
+         }
+      }
+   }
+
+   /**
     * Main
     * @param args The arguments
     */
@@ -1369,6 +1438,7 @@ public class GenerateReports
 
          setup();
          loadNotes();
+         loadIgnores();
          
          for (File f : txtFiles)
          {
