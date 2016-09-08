@@ -33,6 +33,10 @@ HTML report of PostgreSQL configuration
 
 Analysis of queries sent
 
+### Replay
+
+Replay of SQL sent by an application
+
 ## License
 
 All tools are released under the MIT license.
