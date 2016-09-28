@@ -100,7 +100,13 @@ The query identifiers provides the links to the report in the main report.
 
 The reports are located in the ```/path/to/work_area/report``` directory. The main report is ```index.html```
 
-Each report shows
+Overview reports
+
+* Tables - layout, primary key, existing indexes and suggestions for primary key and indexes
+* Times - CSV file with planning and execution times
+* HOT - Shows columns that are updated which has an index associated
+
+Each query report shows
 
 * The query
 * The executed query, if ```query``` contains ```?```

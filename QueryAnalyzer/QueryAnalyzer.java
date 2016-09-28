@@ -180,6 +180,7 @@ public class QueryAnalyzer
       l.add("<ul>");
       l.add("<li><a href=\"tables.html\">Tables</a></li>");
       l.add("<li><a href=\"result.csv\">Times</a></li>");
+      l.add("<li><a href=\"hot.html\">HOT</a></li>");
       l.add("</ul>");
       l.add("<p>");
       
@@ -491,6 +492,93 @@ public class QueryAnalyzer
       }
 
       writeFile(Paths.get("report", "result.csv"), l);
+   }
+
+   /**
+    * Write hot.html
+    */
+   private static void writeHOT() throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
+      l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+      l.add("");
+      l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
+      l.add("<head>");
+      l.add("  <title>HOT information</title>");
+      l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+      l.add("</head>");
+      l.add("<body>");
+      l.add("<h1>HOT information</h1>");
+      l.add("");
+
+      //  Table       Column  Indexes
+      Map<String, Map<String, Set<String>>> m = new TreeMap<>();
+
+      for (Map.Entry<String, Set<String>> sEntry : set.entrySet())
+      {
+         Map<String, Set<String>> tIndexes = indexes.get(sEntry.getKey());
+         if (tIndexes != null && !tIndexes.isEmpty())
+         {
+            for (Map.Entry<String, Set<String>> idxEntry : tIndexes.entrySet())
+            {
+               for (String col : sEntry.getValue())
+               {
+                  if (idxEntry.getValue().contains(col))
+                  {
+                     Map<String, Set<String>> d = m.get(sEntry.getKey());
+                     if (d == null)
+                        d = new TreeMap<>();
+
+                     Set<String> idxs = d.get(col);
+                     if (idxs == null)
+                        idxs = new TreeSet<>();
+
+                     idxs.add(idxEntry.getKey());
+                     d.put(col, idxs);
+                     m.put(sEntry.getKey(), d);
+                  }
+               }
+            }
+         }
+      }
+
+      for (Map.Entry<String, Map<String, Set<String>>> entry : m.entrySet())
+      {
+         l.add("<h2>" + entry.getKey() + "</h2>");
+         l.add("<table>");
+         l.add("<tr>");
+         l.add("<td><b>Column</b></td>");
+         l.add("<td><b>Index(es)</b></td>");
+         l.add("</tr>");
+
+         for (Map.Entry<String, Set<String>> te : entry.getValue().entrySet())
+         {
+            l.add("<tr>");
+            l.add("<td>" + te.getKey() + "</td>");
+
+            StringBuilder sb = new StringBuilder();
+            Iterator<String> it = te.getValue().iterator();
+            while (it.hasNext())
+            {
+               sb = sb.append(it.next());
+               if (it.hasNext())
+                  sb = sb.append(", ");
+            }
+            l.add("<td>" + sb.toString() + "</td>");
+            l.add("</tr>");
+         }
+         l.add("</table>");
+      }
+
+      l.add("<p>");
+      l.add("<a href=\"index.html\">Back</a>");
+
+      l.add("</body>");
+      l.add("</html>");
+
+      writeFile(Paths.get("report", "hot.html"), l);
    }
 
    /**
@@ -1649,6 +1737,7 @@ public class QueryAnalyzer
          writeIndex(queries);
          writeTables();
          writeCSV();
+         writeHOT();
       }
       catch (Exception e)
       {
