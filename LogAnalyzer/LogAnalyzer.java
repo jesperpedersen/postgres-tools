@@ -59,6 +59,9 @@ public class LogAnalyzer
    /** Raw data:      Process  Log */
    private static Map<Integer, List<String>> rawData = new TreeMap<>();
 
+   /** Interaction */
+   private static boolean interaction;
+
    /** Data:          Process  LogEntry */
    private static Map<Integer, List<LogEntry>> data = new TreeMap<>();
 
@@ -266,7 +269,8 @@ public class LogAnalyzer
          int executeCount = getExecuteCount(lle);
          if (executeCount > 0)
          {
-            interactionLinks.add("<a href=\"" + processId + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
+            if (interaction)
+               interactionLinks.add("<a href=\"" + processId + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
             writeInteractionReport(processId, lle);
          }
       }
@@ -343,9 +347,12 @@ public class LogAnalyzer
             break;
       }
       l.add("</table>");
-      
-      l.add("<h2>Interactions</h2>");
-      l.addAll(interactionLinks);
+
+      if (interaction)
+      {
+         l.add("<h2>Interactions</h2>");
+         l.addAll(interactionLinks);
+      }
       
       l.add("</body>");
       l.add("</html>");
@@ -386,12 +393,15 @@ public class LogAnalyzer
             String s = le.getStatement();
             if (s == null || "".equals(s.trim()))
             {
-               queries.add("<tr>");
-               queries.add("<td>" + String.format("%.3f", duration) + "</td>");
-               queries.add("<td>" + String.format("%.3f", duration) + "</td>");
-               queries.add("<td>" + (le.isPrepared() ? "P" : "S") + "</td>");
-               queries.add("<td></td>");
-               queries.add("</tr>");
+               if (interaction)
+               {
+                  queries.add("<tr>");
+                  queries.add("<td>" + String.format("%.3f", duration) + "</td>");
+                  queries.add("<td>" + String.format("%.3f", duration) + "</td>");
+                  queries.add("<td>" + (le.isPrepared() ? "P" : "S") + "</td>");
+                  queries.add("<td></td>");
+                  queries.add("</tr>");
+               }
                totalEmpty += duration;
                duration = 0.0;
                transactionTime = 0.0;
@@ -446,13 +456,16 @@ public class LogAnalyzer
                   if (inTransaction)
                      transactionTime += duration;
                }
-               
-               queries.add("<tr style=\"background-color: " + (color ? COLOR_1 : COLOR_2) + ";\">");
-               queries.add("<td>" + String.format("%.3f", (inTransaction ? transactionTime : duration)) + "</td>");
-               queries.add("<td>" + String.format("%.3f", duration) + "</td>");
-               queries.add("<td>" + (le.isPrepared() ? "P" : "S") + "</td>");
-               queries.add("<td>" + s + "</td>");
-               queries.add("</tr>");
+
+               if (interaction)
+               {
+                  queries.add("<tr style=\"background-color: " + (color ? COLOR_1 : COLOR_2) + ";\">");
+                  queries.add("<td>" + String.format("%.3f", (inTransaction ? transactionTime : duration)) + "</td>");
+                  queries.add("<td>" + String.format("%.3f", duration) + "</td>");
+                  queries.add("<td>" + (le.isPrepared() ? "P" : "S") + "</td>");
+                  queries.add("<td>" + s + "</td>");
+                  queries.add("</tr>");
+               }
 
                if (s.startsWith("COMMIT"))
                {
@@ -474,47 +487,53 @@ public class LogAnalyzer
          }
       }
 
-      List<String> l = new ArrayList<>();
-      l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
-      l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
-      l.add("");
-      l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
-      l.add("<head>");
-      l.add("  <title>Log Analysis</title>");
-      l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
-      l.add("</head>");
-      l.add("<body>");
-      l.add("<h1>" + processId + "</h1>");
-      l.add("");
+      if (interaction)
+      {
+         List<String> l = new ArrayList<>();
+         l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
+         l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+         l.add("");
+         l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
+         l.add("<head>");
+         l.add("  <title>Log Analysis</title>");
+         l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+         l.add("</head>");
+         l.add("<body>");
+         l.add("<h1>" + processId + "</h1>");
+         l.add("");
 
-      l.add("<h2>Overview</h2>");
-      l.add("<table>");
-      l.add("<tr>");
-      l.add("<td><b>Time</b></td>");
-      l.add("<td>" + String.format("%.3f", totalDuration) + " ms" +
-            (totalEmpty > 0.0 ? " (" + String.format("%.3f", totalEmpty) + " ms)" : "")
-            + "</td>");
-      l.add("</tr>");
-      l.add("<tr>");
-      l.add("<td><b>Transaction</b></td>");
-      l.add("<td>BEGIN: " + begin + " / COMMIT: " + commit + " / ROLLBACK: " + rollback + "</td>");
-      l.add("</tr>");
-      l.add("</table>");
+         l.add("<h2>Overview</h2>");
+         l.add("<table>");
+         l.add("<tr>");
+         l.add("<td><b>Time</b></td>");
+         l.add("<td>" + String.format("%.3f", totalDuration) + " ms" +
+               (totalEmpty > 0.0 ? " (" + String.format("%.3f", totalEmpty) + " ms)" : "")
+               + "</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td><b>Transaction</b></td>");
+         l.add("<td>BEGIN: " + begin + " / COMMIT: " + commit + " / ROLLBACK: " + rollback + "</td>");
+         l.add("</tr>");
+         l.add("</table>");
 
-      l.add("<h2>Executed</h2>");
-      l.add("<table border=\"1\">");
-      l.addAll(queries);
-      l.add("</table>");
+         l.add("<h2>Executed</h2>");
+         l.add("<table border=\"1\">");
+         l.addAll(queries);
+         l.add("</table>");
 
-      l.add("<h2>Raw</h2>");
-      l.add("<a href=\"" + processId + ".log\">Link</a>");
+         if (keepRaw)
+         {
+            l.add("<h2>Raw</h2>");
+            l.add("<a href=\"" + processId + ".log\">Link</a>");
+         }
       
-      l.add("<p>");
-      l.add("<a href=\"index.html\">Back</a>");
-      l.add("</body>");
-      l.add("</html>");
+         l.add("<p>");
+         l.add("<a href=\"index.html\">Back</a>");
+         l.add("</body>");
+         l.add("</html>");
 
-      writeFile(Paths.get("report", processId + ".html"), l);
+         writeFile(Paths.get("report", processId + ".html"), l);
+      }
    }
    
    /**
@@ -740,6 +759,7 @@ public class LogAnalyzer
 
          readConfiguration(DEFAULT_CONFIGURATION);
          keepRaw = Boolean.valueOf(configuration.getProperty("keep_raw", "false"));
+         interaction = Boolean.valueOf(configuration.getProperty("interaction", "true"));
 
          setup();
 

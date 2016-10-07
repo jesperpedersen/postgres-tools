@@ -48,6 +48,12 @@ Keep the raw log files
 
 Default is ```false```
 
+#### interaction
+
+Create the interaction reports
+
+Default is ```true```
+
 ### Run
 
 ```bash
