@@ -24,6 +24,8 @@
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
+import java.io.LineNumberReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -612,69 +614,80 @@ public class LogAnalyzer
     */
    private static void processLog() throws Exception
    {
-      List<String> l = Files.readAllLines(Paths.get(filename));
-
-      for (int i = 0; i < l.size(); i++)
+      FileReader fr = null;
+      LineNumberReader lnr = null;
+      String s = null;
+      LogEntry le = null;
+      try
       {
-         String s = l.get(i);
-         LogEntry le = new LogEntry(s);
+         fr = new FileReader(Paths.get(filename).toFile());
+         lnr = new LineNumberReader(fr);
 
-         // Raw data insert
-         if (keepRaw)
+         while ((s = lnr.readLine()) != null)
          {
-            List<String> ls = rawData.get(le.getProcessId());
-            if (ls == null)
-               ls = new ArrayList<>();
-            ls.add(s);
-            rawData.put(le.getProcessId(), ls);
-         }
+            le = new LogEntry(s);
 
-         // Data insert
-         List<LogEntry> lle = data.get(le.getProcessId());
-         if (lle == null)
-            lle = new ArrayList<>();
-         lle.add(le);
-         data.put(le.getProcessId(), lle);
-         
-         if (le.isParse())
-         {
-            parseTime += le.getDuration();
-         }
-         else if (le.isBind())
-         {
-            bindTime += le.getDuration();
-
-            String stmt = le.getStatement();
-            if (stmt == null || "".equals(stmt.trim()))
-               emptyTime += le.getDuration() + lle.get(lle.size() - 2).getDuration();
-         }
-         else if (le.isExecute())
-         {
-            executeTime += le.getDuration();
-
-            String stmt = le.getStatement();
-
-            // Statements insert
-            Integer count = statements.get(stmt);
-            if (count == null)
+            // Raw data insert
+            if (keepRaw)
             {
-               count = Integer.valueOf(1);
+               List<String> ls = rawData.get(le.getProcessId());
+               if (ls == null)
+                  ls = new ArrayList<>();
+               ls.add(s);
+               rawData.put(le.getProcessId(), ls);
             }
-            else
-            {
-               count = Integer.valueOf(count.intValue() + 1);
-            }
-            statements.put(stmt, count);
-         }
+
+            // Data insert
+            List<LogEntry> lle = data.get(le.getProcessId());
+            if (lle == null)
+               lle = new ArrayList<>();
+            lle.add(le);
+            data.put(le.getProcessId(), lle);
          
-         if (i == 0)
-         {
-            startDate = le.getTimestamp();
+            if (le.isParse())
+            {
+               parseTime += le.getDuration();
+            }
+            else if (le.isBind())
+            {
+               bindTime += le.getDuration();
+
+               String stmt = le.getStatement();
+               if (stmt == null || "".equals(stmt.trim()))
+                  emptyTime += le.getDuration() + lle.get(lle.size() - 2).getDuration();
+            }
+            else if (le.isExecute())
+            {
+               executeTime += le.getDuration();
+
+               String stmt = le.getStatement();
+
+               // Statements insert
+               Integer count = statements.get(stmt);
+               if (count == null)
+               {
+                  count = Integer.valueOf(1);
+               }
+               else
+               {
+                  count = Integer.valueOf(count.intValue() + 1);
+               }
+               statements.put(stmt, count);
+            }
+         
+            if (startDate == null)
+               startDate = le.getTimestamp();
          }
-         else if (i == l.size() - 1)
-         {
-            endDate = le.getTimestamp();
-         }         
+
+         endDate = le.getTimestamp();
+      }
+      finally
+      {
+         if (lnr != null)
+            lnr.close();
+
+         if (fr != null)
+            fr.close();
       }
 
       if (keepRaw)
