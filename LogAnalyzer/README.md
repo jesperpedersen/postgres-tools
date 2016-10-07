@@ -37,6 +37,17 @@ log_line_prefix = '%p [%t] [%x] '
 
 and do a run of the SQL statement that you want to analyze.
 
+### Configuration
+
+The configuration of LogAnalyzer is done in the ```loganalyzer.properties``` file, which supports the following
+options.
+
+#### keep_raw
+
+Keep the raw log files
+
+Default is ```false```
+
 ### Run
 
 ```bash

@@ -23,6 +23,7 @@
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -31,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.TreeMap;
 
 /**
@@ -39,11 +41,20 @@ import java.util.TreeMap;
  */
 public class LogAnalyzer
 {
+   /** Default configuration */
+   private static final String DEFAULT_CONFIGURATION = "loganalyzer.properties";
+
+   /** The configuration */
+   private static Properties configuration;
+
    /** Color 1 */
    private static final String COLOR_1 = "#cce6ff";
 
    /** Color 2 */
    private static final String COLOR_2 = "#ccffcc";
+
+   /** Keep the raw data */
+   private static boolean keepRaw;
 
    /** Raw data:      Process  Log */
    private static Map<Integer, List<String>> rawData = new TreeMap<>();
@@ -590,11 +601,14 @@ public class LogAnalyzer
          LogEntry le = new LogEntry(s);
 
          // Raw data insert
-         List<String> ls = rawData.get(le.getProcessId());
-         if (ls == null)
-            ls = new ArrayList<>();
-         ls.add(s);
-         rawData.put(le.getProcessId(), ls);
+         if (keepRaw)
+         {
+            List<String> ls = rawData.get(le.getProcessId());
+            if (ls == null)
+               ls = new ArrayList<>();
+            ls.add(s);
+            rawData.put(le.getProcessId(), ls);
+         }
 
          // Data insert
          List<LogEntry> lle = data.get(le.getProcessId());
@@ -644,11 +658,14 @@ public class LogAnalyzer
          }         
       }
 
-      for (Integer proc : rawData.keySet())
+      if (keepRaw)
       {
-         List<String> write = rawData.get(proc);
-         writeFile(Paths.get("report", proc + ".log"), write);
-      }      
+         for (Integer proc : rawData.keySet())
+         {
+            List<String> write = rawData.get(proc);
+            writeFile(Paths.get("report", proc + ".log"), write);
+         }
+      }
    }
 
    /**
@@ -662,6 +679,40 @@ public class LogAnalyzer
          return true;
 
       return false;
+   }
+
+   /**
+    * Read the configuration (replay.properties)
+    * @param config The configuration
+    */
+   private static void readConfiguration(String config) throws Exception
+   {
+      File f = new File(config);
+      configuration = new Properties();
+
+      if (f.exists())
+      {
+         FileInputStream fis = null;
+         try
+         {
+            fis = new FileInputStream(f);
+            configuration.load(fis);
+         }
+         finally
+         {
+            if (fis != null)
+            {
+               try
+               {
+                  fis.close();
+               }
+               catch (Exception e)
+               {
+                  // Nothing todo
+               }
+            }
+         }
+      }
    }
 
    /**
@@ -686,6 +737,9 @@ public class LogAnalyzer
             System.out.println("Usage: LogAnalyzer <log_file>");
             return;
          }
+
+         readConfiguration(DEFAULT_CONFIGURATION);
+         keepRaw = Boolean.valueOf(configuration.getProperty("keep_raw", "false"));
 
          setup();
 
