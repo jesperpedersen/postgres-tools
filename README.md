@@ -41,6 +41,10 @@ Analysis of queries sent
 
 Replay of SQL sent by an application
 
+### ShrinkLog
+
+Shrink a PostgreSQL log
+
 ## License
 
 All tools are released under the MIT license.
