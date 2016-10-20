@@ -24,7 +24,9 @@
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.FilenameFilter;
+import java.io.LineNumberReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -72,9 +74,6 @@ public class Replay
    /** The configuration */
    private static Properties configuration;
 
-   /** Raw data:      Process  Log */
-   private static Map<Integer, List<String>> rawData = new TreeMap<>();
-
    /** Data:          Process  LogEntry */
    private static Map<Integer, List<LogEntry>> data = new TreeMap<>();
 
@@ -119,34 +118,44 @@ public class Replay
     */
    private static void processLog() throws Exception
    {
-      List<String> l = Files.readAllLines(Paths.get(filename));
-
-      for (int i = 0; i < l.size(); i++)
+      FileReader fr = null;
+      LineNumberReader lnr = null;
+      String s = null;
+      LogEntry le = null;
+      boolean execute = false;
+      try
       {
-         String s = l.get(i);
-         LogEntry le = new LogEntry(s);
+         fr = new FileReader(Paths.get(filename).toFile());
+         lnr = new LineNumberReader(fr);
 
-         // Raw data insert
-         List<String> ls = rawData.get(le.getProcessId());
-         if (ls == null)
-            ls = new ArrayList<>();
-         ls.add(s);
-         rawData.put(le.getProcessId(), ls);
+         while ((s = lnr.readLine()) != null)
+         {
+            le = new LogEntry(s);
 
-         // Data insert
-         List<LogEntry> lle = data.get(le.getProcessId());
-         if (lle == null)
-            lle = new ArrayList<>();
-         lle.add(le);
-         data.put(le.getProcessId(), lle);
-         
+            if (le.isParse() || le.isBind())
+            {
+               execute = false;
+            }
+            else if (le.isExecute() || (execute && le.isParameters()))
+            {
+               execute = true;
+
+               List<LogEntry> lle = data.get(le.getProcessId());
+               if (lle == null)
+                  lle = new ArrayList<>();
+               lle.add(le);
+               data.put(le.getProcessId(), lle);
+            }
+         }
       }
-
-      for (Integer proc : rawData.keySet())
+      finally
       {
-         List<String> write = rawData.get(proc);
-         writeFile(Paths.get(profilename, proc + ".log"), write);
-      }      
+         if (lnr != null)
+            lnr.close();
+
+         if (fr != null)
+            fr.close();
+      }
    }
 
    /**
@@ -196,12 +205,13 @@ public class Replay
                      i++;
                   }
                }
-               
+
                l.addAll(de.getData());
             }
          }
-         
-         writeFile(Paths.get(profilename, proc + ".cli"), l);
+
+         if (l.size() > 0)
+            writeFile(Paths.get(profilename, proc + ".cli"), l);
       }      
    }
 
@@ -500,6 +510,7 @@ public class Replay
       CountDownLatch clientReady = new CountDownLatch(clientData.length);
       CountDownLatch clientRun = new CountDownLatch(1);
       CountDownLatch clientDone = new CountDownLatch(clientData.length);
+      int statements = 0;
       
       for (File f : clientData)
       {
@@ -514,6 +525,7 @@ public class Replay
             String types = l.get(i++);
             String parameters = l.get(i++);
             interaction.add(new DataEntry(prepared, statement, types, parameters));
+            statements++;
          }
 
          clients.add(new Client(f.getName(), interaction,
@@ -537,6 +549,7 @@ public class Replay
 
       System.out.println("Clock: " + (end - start) + "ms");
       System.out.println("  Number of clients: " + clients.size());
+      System.out.println("  Statements: " + statements);
       for (Client cli : clients)
       {
          System.out.println("  " + cli.getId() + ": " + cli.getRunTime() + "/" + cli.getConnectionTime());
@@ -573,10 +586,10 @@ public class Replay
    private static void readConfiguration(String config) throws Exception
    {
       File f = new File(config);
+      configuration = new Properties();
 
       if (f.exists())
       {
-         configuration = new Properties();
          FileInputStream fis = null;
          try
          {
@@ -988,9 +1001,22 @@ public class Replay
          this.prepared = false;
 
          this.parse = isParse(this.fullStatement);
-         this.bind = isBind(this.fullStatement);
-         this.execute = isExecute(this.fullStatement);
-         this.parameters = isParameters(this.fullStatement);
+         this.bind = false;
+         this.execute = false;
+         this.parameters = false;
+
+         if (!parse)
+         {
+            this.bind = isBind(this.fullStatement);
+            if (!bind)
+            {
+               this.execute = isExecute(this.fullStatement);
+               if (!execute)
+               {
+                  this.parameters = isParameters(this.fullStatement);
+               }
+            }
+         }
       }
 
       int getProcessId()

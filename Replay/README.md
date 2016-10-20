@@ -47,7 +47,7 @@ and do a run of the SQL statement that you want to replay.
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:jsqlparser-0.9.6.jar:postgresql-9.4.1210.jar Replay -i postgresql.log
+/path/to/java -classpath .:jsqlparser-0.9.6.jar:postgresql-9.4.1211.jar Replay -i postgresql.log
 ```
 
 The name of the profile is basename of the log file, e.g. ```postgresql``` in the above example.
@@ -91,7 +91,7 @@ Required option.
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:jsqlparser-0.9.6.jar:postgresql-9.4.1210.jar Replay postgresql
+/path/to/java -classpath .:jsqlparser-0.9.6.jar:postgresql-9.4.1211.jar Replay postgresql
 ```
 
 ## Result
