@@ -30,8 +30,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -45,6 +48,9 @@ public class LogAnalyzer
 {
    /** Default configuration */
    private static final String DEFAULT_CONFIGURATION = "loganalyzer.properties";
+
+   /** Date format */
+   private static DateFormat df;
 
    /** The configuration */
    private static Properties configuration;
@@ -75,6 +81,9 @@ public class LogAnalyzer
 
    /** Total time:    SQL     Time */
    private static Map<String, Double> totaltime = new TreeMap<>();
+
+   /** Total idle in transaction */
+   private static long totalIdleInTransaction = 0;
 
    /** The file name */
    private static String filename;
@@ -196,41 +205,63 @@ public class LogAnalyzer
 
       totalWeight = selectWeight + updateWeight + insertWeight + deleteWeight;
       
+      List<String> interactionLinks = new ArrayList<>();
+      for (Integer processId : data.keySet())
+      {
+         List<LogEntry> lle = data.get(processId);
+         int executeCount = getExecuteCount(lle);
+         if (executeCount > 0)
+         {
+            if (interaction)
+               interactionLinks.add("<a href=\"" + processId + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
+            writeInteractionReport(processId, lle);
+         }
+      }
+
       l.add("<h2>Overview</h2>");
 
       l.add("<table>");
       l.add("<tr>");
       l.add("<td><b>SELECT</b></td>");
-      l.add("<td>" +  String.format("%.2f", ((selectWeight / totalWeight) * 100)) + "%</td>");
+      l.add("<td>" +  String.format("%.2f", totalWeight != 0.0 ? ((selectWeight / totalWeight) * 100) : 0.0) + "%</td>");
       l.add("<td><b>PARSE</b></td>");
       l.add("<td>" +  String.format("%.3f", parseTime) + " ms</td>");
       l.add("<td><b>BEGIN</b></td>");
-      l.add("<td>" + statements.get("BEGIN") + "</td>");
+      l.add("<td>" + (statements.get("BEGIN") != null ? statements.get("BEGIN") : 0) + "</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>UPDATE</b></td>");
-      l.add("<td>" + String.format("%.2f", ((updateWeight / totalWeight) * 100)) + "%</td>");
+      l.add("<td>" + String.format("%.2f", totalWeight != 0.0 ? ((updateWeight / totalWeight) * 100) : 0.0) + "%</td>");
       l.add("<td><b>BIND</b></td>");
       l.add("<td>" +  String.format("%.3f", bindTime) + " ms</td>");
       l.add("<td><b>COMMIT</b></td>");
-      l.add("<td>" + statements.get("COMMIT") + "</td>");
+      l.add("<td>" + (statements.get("COMMIT") != null ? statements.get("COMMIT") : 0) + "</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>INSERT</b></td>");
-      l.add("<td>" + String.format("%.2f", ((insertWeight / totalWeight) * 100)) + "%</td>");
+      l.add("<td>" + String.format("%.2f", totalWeight != 0.0 ? ((insertWeight / totalWeight) * 100) : 0.0) + "%</td>");
       l.add("<td><b>EXECUTE</b></td>");
       l.add("<td>" +  String.format("%.3f", executeTime) + " ms</td>");
       l.add("<td><b>ROLLBACK</b></td>");
-      l.add("<td>" + statements.get("ROLLBACK") + "</td>");
+      l.add("<td>" + (statements.get("ROLLBACK") != null ? statements.get("ROLLBACK") : 0) + "</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>DELETE</b></td>");
-      l.add("<td>" + String.format("%.2f", ((deleteWeight / totalWeight) * 100)) + "%</td>");
+      l.add("<td>" + String.format("%.2f", totalWeight != 0.0 ? ((deleteWeight / totalWeight) * 100) : 0.0) + "%</td>");
       l.add("<td><b>TOTAL</b></td>");
       l.add("<td>" +  String.format("%.3f", parseTime + bindTime + executeTime) + " ms</td>");
-      l.add("<td>" + (emptyTime > 0.0 ? "<b>EMPTY</b>" : "") + "</td>");
-      l.add("<td>" + (emptyTime > 0.0 ? String.format("%.3f", emptyTime) + " ms" : "") + "</td>");
+      l.add("<td><b>IDLE</b></td>");
+      l.add("<td>" +  totalIdleInTransaction + " ms</td>");
       l.add("</tr>");
+      if (emptyTime > 0.0)
+      {
+         l.add("<td></td>");
+         l.add("<td></td>");
+         l.add("<td><b>EMPTY</b></td>");
+         l.add("<td>" + String.format("%.3f", emptyTime) + " ms</td>");
+         l.add("<td></td>");
+         l.add("<td></td>");
+      }
       l.add("</table>");
 
       l.add("<p>");
@@ -264,19 +295,6 @@ public class LogAnalyzer
       l.add("<p>");
 
       l.add("<h2>Total time</h2>");
-      List<String> interactionLinks = new ArrayList<>();
-      for (Integer processId : data.keySet())
-      {
-         List<LogEntry> lle = data.get(processId);
-         int executeCount = getExecuteCount(lle);
-         if (executeCount > 0)
-         {
-            if (interaction)
-               interactionLinks.add("<a href=\"" + processId + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
-            writeInteractionReport(processId, lle);
-         }
-      }
-
       TreeMap<Double, List<String>> times = new TreeMap<>();
       for (String stmt : totaltime.keySet())
       {
@@ -379,6 +397,8 @@ public class LogAnalyzer
       boolean color = true;
       boolean inTransaction = false;
       double transactionTime = 0.0;
+      long idleInTransaction = 0;
+      long beginTime = 0;
       
       for (LogEntry le : lle)
       {
@@ -422,16 +442,19 @@ public class LogAnalyzer
                   begin++;
                   inTransaction = true;
                   transactionTime = duration;
+                  beginTime = le.timeAsLong();
                }
                else if (s.startsWith("COMMIT"))
                {
                   commit++;
                   transactionTime += duration;
+                  idleInTransaction += (le.timeAsLong() - (beginTime + transactionTime));
                }
                else if (s.startsWith("ROLLBACK"))
                {
                   rollback++;
                   transactionTime += duration;
+                  idleInTransaction += (le.timeAsLong() - (beginTime + transactionTime));
                }
                else
                {
@@ -489,6 +512,8 @@ public class LogAnalyzer
          }
       }
 
+      totalIdleInTransaction += idleInTransaction;
+
       if (interaction)
       {
          List<String> l = new ArrayList<>();
@@ -507,14 +532,30 @@ public class LogAnalyzer
          l.add("<h2>Overview</h2>");
          l.add("<table>");
          l.add("<tr>");
-         l.add("<td><b>Time</b></td>");
+         l.add("<td><b>Total time</b></td>");
+         l.add("<td>" + (lle.get(lle.size() - 1).timeAsLong() - lle.get(0).timeAsLong()) + " ms</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td><b>Statement time</b></td>");
          l.add("<td>" + String.format("%.3f", totalDuration) + " ms" +
                (totalEmpty > 0.0 ? " (" + String.format("%.3f", totalEmpty) + " ms)" : "")
                + "</td>");
          l.add("</tr>");
          l.add("<tr>");
-         l.add("<td><b>Transaction</b></td>");
-         l.add("<td>BEGIN: " + begin + " / COMMIT: " + commit + " / ROLLBACK: " + rollback + "</td>");
+         l.add("<td><b>Idle in transaction</b></td>");
+         l.add("<td>" + idleInTransaction + " ms</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td><b>BEGIN</b></td>");
+         l.add("<td>" + begin + "</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td><b>COMMIT</b></td>");
+         l.add("<td>" + commit + "</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td><b>ROLLBACK</b></td>");
+         l.add("<td>" + rollback + "</td>");
          l.add("</tr>");
          l.add("</table>");
 
@@ -773,6 +814,7 @@ public class LogAnalyzer
          readConfiguration(DEFAULT_CONFIGURATION);
          keepRaw = Boolean.valueOf(configuration.getProperty("keep_raw", "false"));
          interaction = Boolean.valueOf(configuration.getProperty("interaction", "true"));
+         df = new SimpleDateFormat(configuration.getProperty("date_format", "yyyy-MM-dd HH:mm:ss.SSS"));
 
          setup();
 
@@ -794,6 +836,7 @@ public class LogAnalyzer
    {
       private int processId;
       private String timestamp;
+      private Long time;
       private int transactionId;
       private String fullStatement;
       private String statement;
@@ -812,6 +855,7 @@ public class LogAnalyzer
 
          this.processId = Integer.valueOf(s.substring(0, bracket1Start).trim());
          this.timestamp = s.substring(bracket1Start + 1, bracket1End);
+         this.time = null;
          this.transactionId = Integer.valueOf(s.substring(bracket2Start + 1, bracket2End));
          this.fullStatement = s.substring(bracket2End + 2);
 
@@ -819,9 +863,19 @@ public class LogAnalyzer
          this.prepared = false;
 
          this.duration = getDuration(this.fullStatement);
+
          this.parse = isParse(this.fullStatement);
-         this.bind = isBind(this.fullStatement);
-         this.execute = isExecute(this.fullStatement);
+         this.bind = false;
+         this.execute = false;
+
+         if (!parse)
+         {
+            this.bind = isBind(this.fullStatement);
+            if (!bind)
+            {
+               this.execute = isExecute(this.fullStatement);
+            }
+         }
       }
 
       int getProcessId()
@@ -832,6 +886,26 @@ public class LogAnalyzer
       String getTimestamp()
       {
          return timestamp;
+      }
+
+      long timeAsLong()
+      {
+         if (time == null)
+         {
+            int space = timestamp.indexOf(" ");
+            String t = timestamp.substring(0, timestamp.indexOf(" ", space + 1));
+            try
+            {
+               Date date = df.parse(t);
+               time = Long.valueOf(date.getTime());
+            }
+            catch (Exception ex)
+            {
+               System.out.println(ex);
+            }
+         }
+
+         return time.longValue();
       }
 
       int getTransactionId()
