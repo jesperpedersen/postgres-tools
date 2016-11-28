@@ -38,7 +38,7 @@ log_directory = 'pg_log'
 log_filename = 'postgresql.log'
 log_rotation_age = 0
 log_min_duration_statement = 0
-log_line_prefix = '%p [%t] [%x] '
+log_line_prefix = '%p [%m] [%x] '
 ```
 
 and do a run of the SQL statement that you want to replay.
