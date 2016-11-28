@@ -422,12 +422,25 @@ public class LogAnalyzer
          if (le.isParse())
          {
             duration += le.getDuration();
-            totalDuration += duration;
+            totalDuration += le.getDuration();
+
+            if ("BEGIN".equals(le.getStatement()))
+            {
+               begin++;
+               inTransaction = true;
+               transactionTime = le.getDuration();
+               beginTime = le.timeAsLong();
+            }
+            else
+            {
+               if (inTransaction)
+                  transactionTime += le.getDuration();
+            }
          }
          else if (le.isBind())
          {
             duration += le.getDuration();
-            totalDuration += duration;
+            totalDuration += le.getDuration();
             
             String s = le.getStatement();
             if (s == null || "".equals(s.trim()))
@@ -441,63 +454,67 @@ public class LogAnalyzer
                   queries.add("<td></td>");
                   queries.add("</tr>");
                }
-               totalEmpty += duration;
+               totalEmpty += le.getDuration();
                duration = 0.0;
                transactionTime = 0.0;
+            }
+            else
+            {
+               if (!inTransaction && "BEGIN".equals(s))
+               {
+                  begin++;
+                  inTransaction = true;
+                  transactionTime = le.getDuration();
+                  beginTime = le.timeAsLong();
+               }
+               else
+               {
+                  if (inTransaction)
+                     transactionTime += le.getDuration();
+               }
             }
          }
          else if (le.isExecute())
          {
             duration += le.getDuration();
-            totalDuration += duration;
+            totalDuration += le.getDuration();
 
             String s = le.getStatement();
             if (s != null)
             {
-               if ("BEGIN".equals(s))
-               {
-                  begin++;
-                  inTransaction = true;
-                  transactionTime = duration;
-                  beginTime = le.timeAsLong();
-               }
-               else if (s.startsWith("COMMIT"))
+               if (s.startsWith("COMMIT"))
                {
                   commit++;
-                  transactionTime += duration;
-                  idleInTransaction += (le.timeAsLong() - (beginTime + transactionTime));
+                  idleInTransaction += (le.timeAsLong() - (beginTime + transactionTime + le.getDuration()));
                }
                else if (s.startsWith("ROLLBACK"))
                {
                   rollback++;
-                  transactionTime += duration;
-                  idleInTransaction += (le.timeAsLong() - (beginTime + transactionTime));
+                  idleInTransaction += (le.timeAsLong() - (beginTime + transactionTime + le.getDuration()));
+               }
+
+               // Total time
+               Double time = totaltime.get(s);
+               if (time == null)
+               {
+                  time = new Double(duration);
                }
                else
                {
-                  // Total time
-                  Double time = totaltime.get(s);
-                  if (time == null)
-                  {
-                     time = new Double(duration);
-                  }
-                  else
-                  {
-                     time = new Double(time.doubleValue() + duration);
-                  }
-                  totaltime.put(s, time);
-
-                  // Max time
-                  time = maxtime.get(s);
-                  if (time == null || duration > time.doubleValue())
-                  {
-                     time = new Double(duration);
-                     maxtime.put(s, time);
-                  }
-                  
-                  if (inTransaction)
-                     transactionTime += duration;
+                  time = new Double(time.doubleValue() + duration);
                }
+               totaltime.put(s, time);
+
+               // Max time
+               time = maxtime.get(s);
+               if (time == null || duration > time.doubleValue())
+               {
+                  time = new Double(duration);
+                  maxtime.put(s, time);
+               }
+
+               if (inTransaction)
+                  transactionTime += le.getDuration();
 
                if (interaction)
                {
