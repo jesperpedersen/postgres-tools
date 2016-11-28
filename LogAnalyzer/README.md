@@ -13,7 +13,7 @@ You may want to take a look at [pgBadger](http://dalibo.github.io/pgbadger/) too
 
 * Compile LogAnalyzer
 
-### Compile QueryAnalyzer
+### Compile LogAnalyzer
 
 ```bash
 cd /path/to/work_area
