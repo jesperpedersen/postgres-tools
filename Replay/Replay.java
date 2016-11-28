@@ -92,6 +92,9 @@ public class Replay
    /** Current table name */
    private static String currentTableName = null;
 
+   /** Iterate through ResultSet */
+   private static boolean resultSet = false;
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -624,8 +627,8 @@ public class Replay
       {
          if (args.length != 1 && args.length != 2)
          {
-            System.out.println("Usage: Replay -i <log_file> (init)");
-            System.out.println("       Replay <profile>     (run)");
+            System.out.println("Usage: Replay -i <log_file>  (init)");
+            System.out.println("       Replay [-r] <profile> (run)");
             return;
          }
 
@@ -682,7 +685,14 @@ public class Replay
          }
          else
          {
-            profilename = args[0];
+            int parameter = 0;
+            if ("-r".equals(args[parameter]))
+            {
+               resultSet = true;
+               parameter++;
+            }
+
+            profilename = args[parameter];
 
             executeClients(url, user, password);
          }
@@ -843,7 +853,15 @@ public class Replay
                   if (!de.isPrepared())
                   {
                      Statement stmt = c.createStatement();
-                     stmt.execute(de.getStatement());
+                     if (stmt.execute(de.getStatement()) && resultSet)
+                     {
+                        ResultSet rs = stmt.getResultSet();
+                        while (rs.next())
+                        {
+                           // Just advance
+                        }
+                        rs.close();
+                     }
                      stmt.close();
                   }
                   else
@@ -935,7 +953,16 @@ public class Replay
                         }
                      }
                      
-                     ps.execute();
+                     if (ps.execute() && resultSet)
+                     {
+                        ResultSet rs = ps.getResultSet();
+                        while (rs.next())
+                        {
+                           // Just advance
+                        }
+                        rs.close();
+                     }
+
                      ps.close();
                   }
                }
