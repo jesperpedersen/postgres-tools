@@ -38,7 +38,9 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * Log analyzer
@@ -84,6 +86,9 @@ public class LogAnalyzer
 
    /** Total idle in transaction */
    private static long totalIdleInTransaction = 0;
+
+   /** Max clients */
+   private static int maxClients = 0;
 
    /** The file name */
    private static String filename;
@@ -228,6 +233,8 @@ public class LogAnalyzer
       l.add("<td>" +  String.format("%.3f", parseTime) + " ms</td>");
       l.add("<td><b>BEGIN</b></td>");
       l.add("<td>" + (statements.get("BEGIN") != null ? statements.get("BEGIN") : 0) + "</td>");
+      l.add("<td><b>MAX CLIENTS</b></td>");
+      l.add("<td>" + maxClients + "</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>UPDATE</b></td>");
@@ -236,6 +243,8 @@ public class LogAnalyzer
       l.add("<td>" +  String.format("%.3f", bindTime) + " ms</td>");
       l.add("<td><b>COMMIT</b></td>");
       l.add("<td>" + (statements.get("COMMIT") != null ? statements.get("COMMIT") : 0) + "</td>");
+      l.add("<td></td>");
+      l.add("<td></td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>INSERT</b></td>");
@@ -244,6 +253,8 @@ public class LogAnalyzer
       l.add("<td>" +  String.format("%.3f", executeTime) + " ms</td>");
       l.add("<td><b>ROLLBACK</b></td>");
       l.add("<td>" + (statements.get("ROLLBACK") != null ? statements.get("ROLLBACK") : 0) + "</td>");
+      l.add("<td></td>");
+      l.add("<td></td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>DELETE</b></td>");
@@ -252,15 +263,21 @@ public class LogAnalyzer
       l.add("<td>" +  String.format("%.3f", parseTime + bindTime + executeTime) + " ms</td>");
       l.add("<td><b>IDLE</b></td>");
       l.add("<td>" +  totalIdleInTransaction + " ms</td>");
+      l.add("<td></td>");
+      l.add("<td></td>");
       l.add("</tr>");
       if (emptyTime > 0.0)
       {
+         l.add("<tr>");
          l.add("<td></td>");
          l.add("<td></td>");
          l.add("<td><b>EMPTY</b></td>");
          l.add("<td>" + String.format("%.3f", emptyTime) + " ms</td>");
          l.add("<td></td>");
          l.add("<td></td>");
+         l.add("<td></td>");
+         l.add("<td></td>");
+         l.add("</tr>");
       }
       l.add("</table>");
 
@@ -655,6 +672,7 @@ public class LogAnalyzer
     */
    private static void processLog() throws Exception
    {
+      Set<Integer> clients = new TreeSet<>();
       FileReader fr = null;
       LineNumberReader lnr = null;
       String s = null;
@@ -714,8 +732,20 @@ public class LogAnalyzer
                   count = Integer.valueOf(count.intValue() + 1);
                }
                statements.put(stmt, count);
+
+               if (le.getStatement().startsWith("COMMIT") || le.getStatement().startsWith("ROLLBACK"))
+               {
+                  if (maxClients < clients.size())
+                     maxClients = clients.size();
+
+                  clients.remove(le.getProcessId());
+               }
+               else
+               {
+                  clients.add(le.getProcessId());
+               }
             }
-         
+
             if (startDate == null)
                startDate = le.getTimestamp();
          }
