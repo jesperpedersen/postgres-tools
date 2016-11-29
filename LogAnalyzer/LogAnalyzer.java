@@ -234,7 +234,7 @@ public class LogAnalyzer
       l.add("<td><b>BEGIN</b></td>");
       l.add("<td>" + (statements.get("BEGIN") != null ? statements.get("BEGIN") : 0) + "</td>");
       l.add("<td><b>MAX CLIENTS</b></td>");
-      l.add("<td>" + maxClients + "</td>");
+      l.add("<td>" + (maxClients != 0 ? maxClients : 1) + "</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>UPDATE</b></td>");
@@ -730,7 +730,16 @@ public class LogAnalyzer
 
                String stmt = le.getStatement();
                if (stmt == null || "".equals(stmt.trim()))
+               {
                   emptyTime += le.getDuration() + lle.get(lle.size() - 2).getDuration();
+               }
+               else
+               {
+                  if (le.getStatement().equals("BEGIN"))
+                  {
+                     clients.add(le.getProcessId());
+                  }
+               }
             }
             else if (le.isExecute())
             {
@@ -756,10 +765,6 @@ public class LogAnalyzer
                      maxClients = clients.size();
 
                   clients.remove(le.getProcessId());
-               }
-               else
-               {
-                  clients.add(le.getProcessId());
                }
             }
 
