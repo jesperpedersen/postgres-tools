@@ -95,6 +95,9 @@ public class Replay
    /** Iterate through ResultSet */
    private static boolean resultSet = false;
 
+   /** Parallel execution */
+   private static boolean parallelExecution = true;
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -514,6 +517,9 @@ public class Replay
       CountDownLatch clientRun = new CountDownLatch(1);
       CountDownLatch clientDone = new CountDownLatch(clientData.length);
       int statements = 0;
+      ExecutorService es = null;
+      long start = 0;
+      long end = 0;
       
       for (File f : clientData)
       {
@@ -536,19 +542,33 @@ public class Replay
                                 url, user, password));
       }
 
-      ExecutorService es = Executors.newFixedThreadPool(clients.size());
-
-      for (Client cli : clients)
+      if (parallelExecution)
       {
-         es.submit(cli);
+         es = Executors.newFixedThreadPool(clients.size());
+
+         for (Client cli : clients)
+         {
+            es.submit(cli);
+         }
+
+         clientReady.await();
+
+         start = System.currentTimeMillis();
+         clientRun.countDown();
+         clientDone.await();
+         end = System.currentTimeMillis();
       }
+      else
+      {
+         clientRun.countDown();
 
-      clientReady.await();
-
-      long start = System.currentTimeMillis();
-      clientRun.countDown();
-      clientDone.await();
-      long end = System.currentTimeMillis();
+         start = System.currentTimeMillis();
+         for (Client cli : clients)
+         {
+            cli.run();
+         }
+         end = System.currentTimeMillis();
+      }
 
       System.out.println("Clock: " + (end - start) + "ms");
       System.out.println("  Number of clients: " + clients.size());
@@ -558,7 +578,8 @@ public class Replay
          System.out.println("  " + cli.getId() + ": " + cli.getRunTime() + "/" + cli.getConnectionTime());
       }
       
-      es.shutdown();
+      if (es != null)
+         es.shutdown();
 
       writeCSV(end - start, clients);
    }
@@ -627,8 +648,8 @@ public class Replay
       {
          if (args.length != 1 && args.length != 2)
          {
-            System.out.println("Usage: Replay -i <log_file>  (init)");
-            System.out.println("       Replay [-r] <profile> (run)");
+            System.out.println("Usage: Replay -i <log_file>       (init)");
+            System.out.println("       Replay [-r] [-s] <profile> (run)");
             return;
          }
 
@@ -685,14 +706,19 @@ public class Replay
          }
          else
          {
-            int parameter = 0;
-            if ("-r".equals(args[parameter]))
+            for (int parameter = 0; parameter < args.length - 1; parameter++)
             {
-               resultSet = true;
-               parameter++;
+               if ("-r".equals(args[parameter]))
+               {
+                  resultSet = true;
+               }
+               else if ("-s".equals(args[parameter]))
+               {
+                  parallelExecution = false;
+               }
             }
 
-            profilename = args[parameter];
+            profilename = args[args.length - 1];
 
             executeClients(url, user, password);
          }
