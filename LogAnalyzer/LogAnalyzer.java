@@ -145,6 +145,7 @@ public class LogAnalyzer
       l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
       l.add("<head>");
       l.add("  <title>Log Analysis</title>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
       l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
       l.add("</head>");
       l.add("<body>");
@@ -415,7 +416,7 @@ public class LogAnalyzer
       boolean inTransaction = false;
       double transactionTime = 0.0;
       long idleInTransaction = 0;
-      long beginTime = 0;
+      LogEntry beginLE = null;
       
       for (LogEntry le : lle)
       {
@@ -429,7 +430,7 @@ public class LogAnalyzer
                begin++;
                inTransaction = true;
                transactionTime = le.getDuration();
-               beginTime = le.timeAsLong();
+               beginLE = le;
             }
             else
             {
@@ -465,7 +466,7 @@ public class LogAnalyzer
                   begin++;
                   inTransaction = true;
                   transactionTime = le.getDuration();
-                  beginTime = le.timeAsLong();
+                  beginLE = le;
                }
                else
                {
@@ -485,12 +486,12 @@ public class LogAnalyzer
                if (s.startsWith("COMMIT"))
                {
                   commit++;
-                  idleInTransaction += (le.timeAsLong() - (beginTime + transactionTime + le.getDuration()));
+                  idleInTransaction += (le.timeAsLong() - (beginLE.timeAsLong() + transactionTime + le.getDuration()));
                }
                else if (s.startsWith("ROLLBACK"))
                {
                   rollback++;
-                  idleInTransaction += (le.timeAsLong() - (beginTime + transactionTime + le.getDuration()));
+                  idleInTransaction += (le.timeAsLong() - (beginLE.timeAsLong() + transactionTime + le.getDuration()));
                }
 
                // Total time
@@ -519,7 +520,42 @@ public class LogAnalyzer
                if (interaction)
                {
                   queries.add("<tr style=\"background-color: " + (color ? COLOR_1 : COLOR_2) + ";\">");
-                  queries.add("<td>" + String.format("%.3f", (inTransaction ? transactionTime : duration)) + "</td>");
+                  if (s.startsWith("COMMIT") || s.startsWith("ROLLBACK"))
+                  {
+                     StringBuilder sb = new StringBuilder();
+                     sb = sb.append("<td>");
+                     sb = sb.append("<div class=\"tooltip\">");
+                     sb = sb.append(String.format("%.3f", (inTransaction ? transactionTime : duration)));
+                     sb = sb.append("<span class=\"tooltiptext\">");
+                     sb = sb.append("<table>");
+                     sb = sb.append("<tr>");
+                     sb = sb.append("<td><b>Start</b></td>");
+                     sb = sb.append("<td>" + beginLE.getTimestamp() + "</td>");
+                     sb = sb.append("</tr>");
+                     sb = sb.append("<tr>");
+                     sb = sb.append("<td><b>End</b></td>");
+                     sb = sb.append("<td>" + le.getTimestamp() + "</td>");
+                     sb = sb.append("</tr>");
+                     sb = sb.append("<tr>");
+                     sb = sb.append("<td><b>Clock</b></td>");
+                     sb = sb.append("<td>" + (le.timeAsLong() - beginLE.timeAsLong()) + " ms</td>");
+                     sb = sb.append("</tr>");
+                     sb = sb.append("<tr>");
+                     sb = sb.append("<td><b>Idle</b></td>");
+                     sb = sb.append("<td>" + idleInTransaction + " ms</td>");
+                     sb = sb.append("</tr>");
+                     sb = sb.append("</table>");
+                     sb = sb.append("</span>");
+                     sb = sb.append("</div>");
+                     sb = sb.append("</td>");
+
+                     queries.add(sb.toString());
+                  }
+                  else
+                  {
+                     queries.add("<td>" + String.format("%.3f", (inTransaction ? transactionTime : duration)) + "</td>");
+                  }
+
                   queries.add("<td>" + String.format("%.3f", duration) + "</td>");
                   queries.add("<td>" + (le.isPrepared() ? "P" : "S") + "</td>");
                   queries.add("<td>" + s + "</td>");
@@ -557,6 +593,7 @@ public class LogAnalyzer
          l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
          l.add("<head>");
          l.add("  <title>Log Analysis</title>");
+         l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
          l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
          l.add("</head>");
          l.add("<body>");
@@ -666,6 +703,38 @@ public class LogAnalyzer
       writeFile(Paths.get("report", "run.properties"), l);
    }
    
+   /**
+    * Write loganalyzer.css
+    */
+   private static void writeCSS() throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      l.add(".tooltip {");
+      l.add("  position: relative;");
+      l.add("  display: inline-block;");
+      l.add("  border-bottom: 1px dotted black;");
+      l.add("}");
+      l.add("");
+      l.add(".tooltip .tooltiptext {");
+      l.add("  visibility: hidden;");
+      l.add("  width: 300px;");
+      l.add("  background-color: #f2f2f2;");
+      l.add("  color: #000000;");
+      l.add("  text-align: left;");
+      l.add("  padding: 5px;");
+      l.add("  border-radius: 3px;");
+      l.add("  position: absolute;");
+      l.add("  z-index: 1;");
+      l.add("}");
+      l.add("");
+      l.add(".tooltip:hover .tooltiptext {");
+      l.add("  visibility: visible;");
+      l.add("}");
+
+      writeFile(Paths.get("report", "loganalyzer.css"), l);
+   }
+
    /**
     * Get the execute count
     * @param lle The interactions
@@ -874,6 +943,7 @@ public class LogAnalyzer
          processLog();
          writeIndex();
          writeQueryAnalyzerFile();
+         writeCSS();
       }
       catch (Exception e)
       {
