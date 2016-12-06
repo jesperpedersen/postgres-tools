@@ -17,7 +17,7 @@ You may want to take a look at [pgBadger](http://dalibo.github.io/pgbadger/) too
 
 ```bash
 cd /path/to/work_area
-/path/to/javac -classpath LogAnalyzer.java
+/path/to/javac LogAnalyzer.java
 ```
 
 ## Usage
