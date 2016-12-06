@@ -415,6 +415,7 @@ public class LogAnalyzer
       boolean color = true;
       boolean inTransaction = false;
       double transactionTime = 0.0;
+      long pIdleInTransaction = 0;
       long idleInTransaction = 0;
       LogEntry beginLE = null;
       
@@ -486,12 +487,12 @@ public class LogAnalyzer
                if (s.startsWith("COMMIT"))
                {
                   commit++;
-                  idleInTransaction += (le.timeAsLong() - (beginLE.timeAsLong() + transactionTime + le.getDuration()));
+                  idleInTransaction = Math.max(0, (le.timeAsLong() - (beginLE.timeAsLong() + (long)Math.ceil(transactionTime + le.getDuration()))));
                }
                else if (s.startsWith("ROLLBACK"))
                {
                   rollback++;
-                  idleInTransaction += (le.timeAsLong() - (beginLE.timeAsLong() + transactionTime + le.getDuration()));
+                  idleInTransaction = Math.max(0, (le.timeAsLong() - (beginLE.timeAsLong() + (long)Math.ceil(transactionTime + le.getDuration()))));
                }
 
                // Total time
@@ -542,7 +543,7 @@ public class LogAnalyzer
                      sb = sb.append("</tr>");
                      sb = sb.append("<tr>");
                      sb = sb.append("<td><b>Idle</b></td>");
-                     sb = sb.append("<td>" + idleInTransaction + " ms</td>");
+                     sb = sb.append("<td>" + idleInTransaction + " ms (" + (idleInTransaction + pIdleInTransaction) + " ms)</td>");
                      sb = sb.append("</tr>");
                      sb = sb.append("</table>");
                      sb = sb.append("</span>");
@@ -578,11 +579,13 @@ public class LogAnalyzer
                }
 
                duration = 0.0;
+               pIdleInTransaction += idleInTransaction;
+               idleInTransaction = 0;
             }
          }
       }
 
-      totalIdleInTransaction += idleInTransaction;
+      totalIdleInTransaction += pIdleInTransaction;
 
       if (interaction)
       {
@@ -614,7 +617,7 @@ public class LogAnalyzer
          l.add("</tr>");
          l.add("<tr>");
          l.add("<td><b>Idle in transaction</b></td>");
-         l.add("<td>" + idleInTransaction + " ms</td>");
+         l.add("<td>" + pIdleInTransaction + " ms</td>");
          l.add("</tr>");
          l.add("<tr>");
          l.add("<td><b>BEGIN</b></td>");
