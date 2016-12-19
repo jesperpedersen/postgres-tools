@@ -29,6 +29,7 @@ import java.io.LineNumberReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -66,11 +67,14 @@ public class LogAnalyzer
    /** Keep the raw data */
    private static boolean keepRaw;
 
-   /** Raw data:      Process  Log */
-   private static Map<Integer, List<String>> rawData = new TreeMap<>();
-
    /** Interaction */
    private static boolean interaction;
+
+   /** Histogram count */
+   private static int histogramCount;
+
+   /** Raw data:      Process  Log */
+   private static Map<Integer, List<String>> rawData = new TreeMap<>();
 
    /** Data:          Process  LogEntry */
    private static Map<Integer, List<LogEntry>> data = new TreeMap<>();
@@ -83,6 +87,12 @@ public class LogAnalyzer
 
    /** Total time:    SQL     Time */
    private static Map<String, Double> totaltime = new TreeMap<>();
+
+   /** Query names:   SQL     Name */
+   private static Map<String, String> queryNames = new TreeMap<>();
+
+   /** Query samples: SQL     Samples */
+   private static Map<String, List<QuerySample>> querySamples = new TreeMap<>();
 
    /** Total idle in transaction */
    private static long totalIdleInTransaction = 0;
@@ -224,6 +234,20 @@ public class LogAnalyzer
          }
       }
 
+      if (histogramCount > 0)
+      {
+         int qNumber = 1;
+         for (String sql : querySamples.keySet())
+         {
+            String qName = "q" + qNumber;
+            queryNames.put(sql, qName);
+
+            writeQueryReport(sql, qName);
+
+            qNumber++;
+         }
+      }
+
       l.add("<h2>Overview</h2>");
 
       l.add("<table>");
@@ -295,7 +319,14 @@ public class LogAnalyzer
             String v = ls.get(i);
             if (!filterStatement(v))
             {
-               sb = sb.append(v);
+               if (histogramCount > 0)
+               {
+                  sb = sb.append("<a href=\"" + (queryNames.get(v)) + ".html\" class=\"nohighlight\">" + v + "</a>");
+               }
+               else
+               {
+                  sb = sb.append(v);
+               }
                if (i < ls.size() - 1)
                   sb = sb.append("<p>");
             }
@@ -333,7 +364,14 @@ public class LogAnalyzer
          StringBuilder sb = new StringBuilder();
          for (int i = 0; i < stmts.size(); i++)
          {
-            sb = sb.append(stmts.get(i));
+            if (histogramCount > 0)
+            {
+               sb = sb.append("<a href=\"" + (queryNames.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
+            }
+            else
+            {
+                  sb = sb.append(stmts.get(i));
+            }
             if (i < stmts.size() - 1)
                sb = sb.append("<p>");
          }
@@ -370,7 +408,14 @@ public class LogAnalyzer
          StringBuilder sb = new StringBuilder();
          for (int i = 0; i < stmts.size(); i++)
          {
-            sb = sb.append(stmts.get(i));
+            if (histogramCount > 0)
+            {
+               sb = sb.append("<a href=\"" + (queryNames.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
+            }
+            else
+            {
+                  sb = sb.append(stmts.get(i));
+            }
             if (i < stmts.size() - 1)
                sb = sb.append("<p>");
          }
@@ -513,6 +558,17 @@ public class LogAnalyzer
                {
                   time = new Double(duration);
                   maxtime.put(s, time);
+               }
+
+               if (histogramCount > 0)
+               {
+                  List<QuerySample> l = querySamples.get(s);
+
+                  if (l == null)
+                     l = new ArrayList<>();
+
+                  l.add(new QuerySample(le.timeAsLong(), duration));
+                  querySamples.put(s, l);
                }
 
                if (inTransaction)
@@ -713,6 +769,11 @@ public class LogAnalyzer
    {
       List<String> l = new ArrayList<>();
 
+      l.add(".nohighlight {");
+      l.add("  color: black;");
+      l.add("  text-decoration: none;");
+      l.add("}");
+      l.add("");
       l.add(".tooltip {");
       l.add("  position: relative;");
       l.add("  display: inline-block;");
@@ -736,6 +797,105 @@ public class LogAnalyzer
       l.add("}");
 
       writeFile(Paths.get("report", "loganalyzer.css"), l);
+   }
+
+   /**
+    * Write the query report
+    * @param sql The SQL
+    * @param qName The query name
+    */
+   private static void writeQueryReport(String sql, String qName) throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
+      l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+      l.add("");
+      l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
+      l.add("<head>");
+      l.add("  <title>Log Analysis: " + sql + "</title>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
+      l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+      l.add("</head>");
+      l.add("<body>");
+      l.add("<h1>Query</h1>");
+      l.add("");
+      l.add(sql);
+      l.add("<p>");
+
+      double min = Double.MAX_VALUE;
+      double max = Double.MIN_VALUE;
+
+      List<QuerySample> qsl = querySamples.get(sql);
+      for (QuerySample qs : qsl)
+      {
+         double d = qs.getDuration();
+         if (d < min)
+            min = d;
+
+         if (d > max)
+            max = d;
+      }
+
+      int[] h = new int[histogramCount];
+      double delta = (max - min) / (double)histogramCount;
+
+      for (QuerySample qs : qsl)
+      {
+         double d = qs.getDuration();
+         h[Math.min(histogramCount - 1, (int)((d / max) * histogramCount))]++;
+      }
+
+      l.add("<div id=\"histogram\" style=\"width:1024px; height:768px;\">");
+      l.add("</div>");
+
+      l.add("<p>");
+
+      l.add("<div id=\"timeline\" style=\"width:1024px; height:768px;\">");
+      l.add("</div>");
+
+      l.add("<script type=\"text/javascript\">");
+      l.add("   histogram = new Dygraph(document.getElementById(\"histogram\"),");
+      l.add("                           \"" + qName + "-histogram" + ".csv\",");
+      l.add("                           {");
+      l.add("                             legend: 'always',");
+      l.add("                             title: 'Histogram',");
+      l.add("                             ylabel: 'Count',");
+      l.add("                           }");
+      l.add("   );");
+      l.add("   timeLine = new Dygraph(document.getElementById(\"timeline\"),");
+      l.add("                          \"" + qName + "-time" + ".csv\",");
+      l.add("                          {");
+      l.add("                            legend: 'always',");
+      l.add("                            title: 'Time line',");
+      l.add("                            ylabel: 'ms',");
+      l.add("                          }");
+      l.add("   );");
+      l.add("</script>");
+
+      l.add("<p>");
+      l.add("<a href=\"index.html\">Back</a>");
+      l.add("</body>");
+      l.add("</html>");
+
+      writeFile(Paths.get("report", qName + ".html"), l);
+
+      List<String> csvHistogram = new ArrayList<>();
+      csvHistogram.add("Duration,Count");
+      for (int i = 0; i < h.length; i++)
+      {
+         csvHistogram.add((min + i * delta) + "," + h[i]);
+      }
+      writeFile(Paths.get("report", qName + "-histogram.csv"), csvHistogram);
+
+      List<String> csvTime = new ArrayList<>();
+      csvTime.add("Timestamp,Duration");
+      for (QuerySample qs : qsl)
+      {
+         csvTime.add(qs.getTimestamp() + "," + qs.getDuration());
+      }
+      writeFile(Paths.get("report", qName + "-time.csv"), csvTime);
    }
 
    /**
@@ -919,6 +1079,8 @@ public class LogAnalyzer
    {
       File report = new File("report");
       report.mkdir();
+
+      Files.copy(Paths.get("dygraph-combined.js"), Paths.get("report", "dygraph-combined.js"), StandardCopyOption.REPLACE_EXISTING);
    }
 
    /**
@@ -938,6 +1100,7 @@ public class LogAnalyzer
          readConfiguration(DEFAULT_CONFIGURATION);
          keepRaw = Boolean.valueOf(configuration.getProperty("keep_raw", "false"));
          interaction = Boolean.valueOf(configuration.getProperty("interaction", "true"));
+         histogramCount = Integer.valueOf(configuration.getProperty("histogram", "1000"));
          df = new SimpleDateFormat(configuration.getProperty("date_format", "yyyy-MM-dd HH:mm:ss.SSS"));
 
          setup();
@@ -1026,7 +1189,7 @@ public class LogAnalyzer
             }
             catch (Exception ex)
             {
-               System.out.println(ex);
+               time = Long.valueOf(0L);
             }
          }
 
@@ -1170,6 +1333,39 @@ public class LogAnalyzer
       public String toString()
       {
          return processId + " [" + timestamp + "] [" + transactionId + "] " + fullStatement;
+      }
+   }
+
+   /**
+    * Query sample
+    */
+   static class QuerySample
+   {
+      private long timestamp;
+      private double duration;
+
+      QuerySample(long timestamp, double duration)
+      {
+         this.timestamp = timestamp;
+         this.duration = duration;
+      }
+
+      /**
+       * Get timestamp
+       * @return The value
+       */
+      long getTimestamp()
+      {
+         return timestamp;
+      }
+
+      /**
+       * Get duration
+       * @return The value
+       */
+      double getDuration()
+      {
+         return duration;
       }
    }
 }

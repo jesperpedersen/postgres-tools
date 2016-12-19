@@ -12,12 +12,20 @@ You may want to take a look at [pgBadger](http://dalibo.github.io/pgbadger/) too
 ## Installation
 
 * Compile LogAnalyzer
+* Get DyGraph
 
 ### Compile LogAnalyzer
 
 ```bash
 cd /path/to/work_area
 /path/to/javac LogAnalyzer.java
+```
+
+### Get DyGraph
+
+```bash
+cd /path/to/work_area
+wget http://dygraphs.com/1.1.1/dygraph-combined.js
 ```
 
 ## Usage
@@ -54,6 +62,12 @@ Create the interaction reports
 
 Default is ```true```
 
+#### histogram
+
+Create the histogram and time line reports
+
+Default is ```1000```. Use ```0``` for off
+
 #### date_format
 
 The date format definition
@@ -78,3 +92,4 @@ The report shows
 * The number of executed queries, and the query itself
 * The total and maximum time spent in queries (top 20)
 * The interaction of each backend with time and transaction information
+* Histogram and time line of each query
