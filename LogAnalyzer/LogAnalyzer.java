@@ -451,6 +451,7 @@ public class LogAnalyzer
    private static void writeInteractionReport(Integer processId, List<LogEntry> lle) throws Exception
    {
       List<String> queries = new ArrayList<>();
+      List<String> transactionTimeline = new ArrayList<>();
       double totalDuration = 0.0;
       double totalEmpty = 0.0;
       double duration = 0.0;
@@ -463,6 +464,8 @@ public class LogAnalyzer
       long pIdleInTransaction = 0;
       long idleInTransaction = 0;
       LogEntry beginLE = null;
+
+      transactionTimeline.add("Time,Duration");
       
       for (LogEntry le : lle)
       {
@@ -607,10 +610,15 @@ public class LogAnalyzer
                      sb = sb.append("</td>");
 
                      queries.add(sb.toString());
+
+                     transactionTimeline.add(le.timeAsLong() + "," + String.format("%.3f", (inTransaction ? transactionTime : duration)));
                   }
                   else
                   {
                      queries.add("<td>" + String.format("%.3f", (inTransaction ? transactionTime : duration)) + "</td>");
+
+                     if (!inTransaction)
+                        transactionTimeline.add(le.timeAsLong() + "," + String.format("%.3f", (inTransaction ? transactionTime : duration)));
                   }
 
                   queries.add("<td>" + String.format("%.3f", duration) + "</td>");
@@ -653,6 +661,7 @@ public class LogAnalyzer
          l.add("<head>");
          l.add("  <title>Log Analysis</title>");
          l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
+         l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
          l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
          l.add("</head>");
          l.add("<body>");
@@ -689,6 +698,10 @@ public class LogAnalyzer
          l.add("</tr>");
          l.add("</table>");
 
+         l.add("<h2>Time line</h2>");
+         l.add("<div id=\"txtimeline\" style=\"width:1024px; height:768px;\">");
+         l.add("</div>");
+
          l.add("<h2>Executed</h2>");
          l.add("<table border=\"1\">");
          l.addAll(queries);
@@ -702,10 +715,21 @@ public class LogAnalyzer
       
          l.add("<p>");
          l.add("<a href=\"index.html\">Back</a>");
+         l.add("<script type=\"text/javascript\">");
+         l.add("   txTimeline = new Dygraph(document.getElementById(\"txtimeline\"),");
+         l.add("                            \"" + processId + "-transaction.csv\",");
+         l.add("                            {");
+         l.add("                              legend: 'always',");
+         l.add("                              ylabel: 'Duration',");
+         l.add("                            }");
+         l.add("   );");
+         l.add("</script>");
+
          l.add("</body>");
          l.add("</html>");
 
          writeFile(Paths.get("report", processId + ".html"), l);
+         writeFile(Paths.get("report", processId + "-transaction.csv"), transactionTimeline);
       }
    }
    
