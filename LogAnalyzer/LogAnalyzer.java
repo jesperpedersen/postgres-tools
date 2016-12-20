@@ -883,8 +883,24 @@ public class LogAnalyzer
       l.add("</head>");
       l.add("<body>");
       l.add("<h1>Query</h1>");
-      l.add("");
-      l.add(sql);
+      l.add("<table>");
+      l.add("<tr>");
+      l.add("<td><b>Statement</b></td>");
+      l.add("<td>" + sql + "</td>");
+      l.add("</tr>");
+      l.add("<tr>");
+      l.add("<td><b>Count</b></td>");
+      l.add("<td>" + statements.get(sql) + "</td>");
+      l.add("</tr>");
+      l.add("<tr>");
+      l.add("<td><b>Total time</b></td>");
+      l.add("<td>" + totaltime.get(sql) + " ms</td>");
+      l.add("</tr>");
+      l.add("<tr>");
+      l.add("<td><b>Max time</b></td>");
+      l.add("<td>" + maxtime.get(sql) + " ms</td>");
+      l.add("</tr>");
+      l.add("</table>");
       l.add("<p>");
 
       double min = Double.MAX_VALUE;
