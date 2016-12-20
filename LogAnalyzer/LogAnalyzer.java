@@ -73,6 +73,15 @@ public class LogAnalyzer
    /** Histogram count */
    private static int histogramCount;
 
+   /** Histogram min */
+   private static double histogramMin = Double.MAX_VALUE;
+
+   /** Histogram max */
+   private static double histogramMax = Double.MIN_VALUE;
+
+   /** Histogram values */
+   private static List<Double> histogramValues = new ArrayList<>();
+
    /** Raw data:      Process  Log */
    private static Map<Integer, List<String>> rawData = new TreeMap<>();
 
@@ -156,6 +165,7 @@ public class LogAnalyzer
       l.add("<head>");
       l.add("  <title>Log Analysis</title>");
       l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
       l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
       l.add("</head>");
       l.add("<body>");
@@ -431,12 +441,41 @@ public class LogAnalyzer
       }
       l.add("</table>");
 
+      l.add("<h2>Transaction histogram</h2>");
+      int[] h = new int[histogramCount];
+      double delta = (histogramMax - histogramMin) / (double)histogramCount;
+
+      for (Double d : histogramValues)
+      {
+         h[Math.min(histogramCount - 1, (int)((d / histogramMax) * histogramCount))]++;
+      }
+
+      l.add("<div id=\"txhistogram\" style=\"width:1024px; height:768px;\">");
+      l.add("</div>");
+
+      List<String> txHistogram = new ArrayList<>();
+      txHistogram.add("Duration,Count");
+      for (int i = 0; i < h.length; i++)
+      {
+         txHistogram.add((histogramMin + i * delta) + "," + h[i]);
+      }
+      writeFile(Paths.get("report", "transaction.csv"), txHistogram);
+
       if (interaction)
       {
          l.add("<h2>Interactions</h2>");
          l.addAll(interactionLinks);
       }
       
+      l.add("<script type=\"text/javascript\">");
+      l.add("   txHistogram = new Dygraph(document.getElementById(\"txhistogram\"),");
+      l.add("                             \"transaction.csv\",");
+      l.add("                             {");
+      l.add("                               legend: 'always',");
+      l.add("                               ylabel: 'Count',");
+      l.add("                             }");
+      l.add("   );");
+      l.add("</script>");
       l.add("</body>");
       l.add("</html>");
 
@@ -862,6 +901,12 @@ public class LogAnalyzer
             max = d;
       }
 
+      if (min < histogramMin)
+         histogramMin = min;
+
+      if (max > histogramMax)
+         histogramMax = max;
+
       int[] h = new int[histogramCount];
       double delta = (max - min) / (double)histogramCount;
 
@@ -869,6 +914,8 @@ public class LogAnalyzer
       {
          double d = qs.getDuration();
          h[Math.min(histogramCount - 1, (int)((d / max) * histogramCount))]++;
+
+         histogramValues.add(d);
       }
 
       l.add("<div id=\"histogram\" style=\"width:1024px; height:768px;\">");
