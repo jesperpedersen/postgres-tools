@@ -441,25 +441,28 @@ public class LogAnalyzer
       }
       l.add("</table>");
 
-      l.add("<h2>Transaction histogram</h2>");
-      int[] h = new int[histogramCount];
-      double delta = (histogramMax - histogramMin) / (double)histogramCount;
-
-      for (Double d : histogramValues)
+      if (histogramCount > 0)
       {
-         h[Math.min(histogramCount - 1, (int)((d / histogramMax) * histogramCount))]++;
-      }
+         l.add("<h2>Transaction histogram</h2>");
+         int[] h = new int[histogramCount];
+         double delta = (histogramMax - histogramMin) / (double)histogramCount;
 
-      l.add("<div id=\"txhistogram\" style=\"width:1024px; height:768px;\">");
-      l.add("</div>");
+         for (Double d : histogramValues)
+         {
+            h[Math.min(histogramCount - 1, (int)((d / histogramMax) * histogramCount))]++;
+         }
 
-      List<String> txHistogram = new ArrayList<>();
-      txHistogram.add("Duration,Count");
-      for (int i = 0; i < h.length; i++)
-      {
-         txHistogram.add((histogramMin + i * delta) + "," + h[i]);
+         l.add("<div id=\"txhistogram\" style=\"width:1024px; height:768px;\">");
+         l.add("</div>");
+
+         List<String> txHistogram = new ArrayList<>();
+         txHistogram.add("Duration,Count");
+         for (int i = 0; i < h.length; i++)
+         {
+            txHistogram.add((histogramMin + i * delta) + "," + h[i]);
+         }
+         writeFile(Paths.get("report", "transaction.csv"), txHistogram);
       }
-      writeFile(Paths.get("report", "transaction.csv"), txHistogram);
 
       if (interaction)
       {
@@ -467,15 +470,19 @@ public class LogAnalyzer
          l.addAll(interactionLinks);
       }
       
-      l.add("<script type=\"text/javascript\">");
-      l.add("   txHistogram = new Dygraph(document.getElementById(\"txhistogram\"),");
-      l.add("                             \"transaction.csv\",");
-      l.add("                             {");
-      l.add("                               legend: 'always',");
-      l.add("                               ylabel: 'Count',");
-      l.add("                             }");
-      l.add("   );");
-      l.add("</script>");
+      if (histogramCount > 0)
+      {
+         l.add("<script type=\"text/javascript\">");
+         l.add("   txHistogram = new Dygraph(document.getElementById(\"txhistogram\"),");
+         l.add("                             \"transaction.csv\",");
+         l.add("                             {");
+         l.add("                               legend: 'always',");
+         l.add("                               ylabel: 'Count',");
+         l.add("                             }");
+         l.add("   );");
+         l.add("</script>");
+      }
+
       l.add("</body>");
       l.add("</html>");
 
@@ -677,6 +684,9 @@ public class LogAnalyzer
 
                if (!inTransaction)
                {
+                  if (histogramCount > 0)
+                     histogramValues.add(transactionTime);
+
                   color = !color;
                   transactionTime = 0.0;
                }
@@ -930,8 +940,6 @@ public class LogAnalyzer
       {
          double d = qs.getDuration();
          h[Math.min(histogramCount - 1, (int)((d / max) * histogramCount))]++;
-
-         histogramValues.add(d);
       }
 
       l.add("<div id=\"histogram\" style=\"width:1024px; height:768px;\">");
