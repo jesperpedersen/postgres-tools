@@ -274,7 +274,8 @@ public class LogAnalyzer
       l.add("<td><b>BIND</b></td>");
       l.add("<td>" +  String.format("%.3f", bindTime) + " ms</td>");
       l.add("<td><b>COMMIT</b></td>");
-      l.add("<td>" + (statements.get("COMMIT") != null ? statements.get("COMMIT") : 0) + "</td>");
+      l.add("<td>" + ((statements.get("COMMIT") != null ? statements.get("COMMIT") : 0) +
+                      (statements.get("COMMIT PREPARED") != null ? statements.get("COMMIT PREPARED") : 0)) + "</td>");
       l.add("<td></td>");
       l.add("<td></td>");
       l.add("</tr>");
@@ -284,7 +285,8 @@ public class LogAnalyzer
       l.add("<td><b>EXECUTE</b></td>");
       l.add("<td>" +  String.format("%.3f", executeTime) + " ms</td>");
       l.add("<td><b>ROLLBACK</b></td>");
-      l.add("<td>" + (statements.get("ROLLBACK") != null ? statements.get("ROLLBACK") : 0) + "</td>");
+      l.add("<td>" + ((statements.get("ROLLBACK") != null ? statements.get("ROLLBACK") : 0) +
+                      (statements.get("ROLLBACK PREPARED") != null ? statements.get("ROLLBACK PREPARED") : 0)) + "</td>");
       l.add("<td></td>");
       l.add("<td></td>");
       l.add("</tr>");
@@ -1251,6 +1253,19 @@ public class LogAnalyzer
             {
                this.execute = isExecute(this.fullStatement);
             }
+         }
+
+         if (statement.startsWith("PREPARE TRANSACTION"))
+         {
+            statement = "PREPARE TRANSACTION";
+         }
+         else if (statement.startsWith("COMMIT PREPARED"))
+         {
+            statement = "COMMIT PREPARED";
+         }
+         else if (statement.startsWith("ROLLBACK PREPARED"))
+         {
+            statement = "ROLLBACK PREPARED";
          }
       }
 
