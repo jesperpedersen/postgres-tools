@@ -36,6 +36,7 @@ Configure PostgreSQL with the following settings in ```postgresql.conf```
 
 ```
 log_destination = 'stderr'
+logging_collector = on
 log_directory = 'pg_log'
 log_filename = 'postgresql.log'
 log_rotation_age = 0
