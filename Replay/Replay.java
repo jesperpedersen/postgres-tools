@@ -897,84 +897,87 @@ public class Replay
                      List<Integer> types = de.getTypes();
                      List<String> parameters = de.getParameters();
 
-                     for (int i = 0; i < types.size(); i++)
+                     if (types != null)
                      {
-                        int type = types.get(i);
-                        String value = parameters.get(i);
+                        for (int i = 0; i < types.size(); i++)
+                        {
+                           int type = types.get(i);
+                           String value = parameters.get(i);
 
-                        if ("null".equals(value))
-                        {
-                           ps.setObject(i + 1, null);
-                        }
-                        else
-                        {
-                           switch (type)
+                           if ("null".equals(value))
                            {
-                              case Types.BINARY:
-                                 ps.setBytes(i + 1, DatatypeConverter.parseHexBinary(value.substring(2)));
-                                 break;
-                              case Types.BIT:
-                                 ps.setBoolean(i + 1, Boolean.valueOf(value));
-                                 break;
-                              case Types.BIGINT:
-                                 ps.setLong(i + 1, Long.valueOf(value));
-                                 break;
-                              case Types.BOOLEAN:
-                                 ps.setBoolean(i + 1, Boolean.valueOf(value));
-                                 break;
-                              case Types.CHAR:
-                                 ps.setString(i + 1, value);
-                                 break;
-                              case Types.DATE:
-                                 ps.setDate(i + 1, java.sql.Date.valueOf(value));
-                                 break;
-                              case Types.DECIMAL:
-                                 ps.setDouble(i + 1, Double.valueOf(value));
-                                 break;
-                              case Types.DOUBLE:
-                                 ps.setDouble(i + 1, Double.valueOf(value));
-                                 break;
-                              case Types.FLOAT:
-                                 ps.setFloat(i + 1, Float.valueOf(value));
-                                 break;
-                              case Types.INTEGER:
-                                 ps.setInt(i + 1, Integer.valueOf(value));
-                                 break;
-                              case Types.LONGVARBINARY:
-                                 ps.setBytes(i + 1, DatatypeConverter.parseHexBinary(value.substring(2)));
-                                 break;
-                              case Types.LONGVARCHAR:
-                                 ps.setString(i + 1, value);
-                                 break;
-                              case Types.NUMERIC:
-                                 ps.setDouble(i + 1, Double.valueOf(value));
-                                 break;
-                              case Types.REAL:
-                                 ps.setFloat(i + 1, Float.valueOf(value));
-                                 break;
-                              case Types.SMALLINT:
-                                 ps.setShort(i + 1, Short.valueOf(value));
-                                 break;
-                              case Types.TIME:
-                              case Types.TIME_WITH_TIMEZONE:
-                                 ps.setTime(i + 1, java.sql.Time.valueOf(value));
-                                 break;
-                              case Types.TIMESTAMP:
-                              case Types.TIMESTAMP_WITH_TIMEZONE:
-                                 ps.setTimestamp(i + 1, java.sql.Timestamp.valueOf(value));
-                                 break;
-                              case Types.TINYINT:
-                                 ps.setShort(i + 1, Short.valueOf(value));
-                                 break;
-                              case Types.VARBINARY:
-                                 ps.setBytes(i + 1, DatatypeConverter.parseHexBinary(value.substring(2)));
-                                 break;
-                              case Types.VARCHAR:
-                                 ps.setString(i + 1, value);
-                                 break;
-                              default:
-                                 System.out.println("Unsupported value: " + type);
-                                 break;
+                              ps.setObject(i + 1, null);
+                           }
+                           else
+                           {
+                              switch (type)
+                              {
+                                 case Types.BINARY:
+                                    ps.setBytes(i + 1, DatatypeConverter.parseHexBinary(value.substring(2)));
+                                    break;
+                                 case Types.BIT:
+                                    ps.setBoolean(i + 1, Boolean.valueOf(value));
+                                    break;
+                                 case Types.BIGINT:
+                                    ps.setLong(i + 1, Long.valueOf(value));
+                                    break;
+                                 case Types.BOOLEAN:
+                                    ps.setBoolean(i + 1, Boolean.valueOf(value));
+                                    break;
+                                 case Types.CHAR:
+                                    ps.setString(i + 1, value);
+                                    break;
+                                 case Types.DATE:
+                                    ps.setDate(i + 1, java.sql.Date.valueOf(value));
+                                    break;
+                                 case Types.DECIMAL:
+                                    ps.setDouble(i + 1, Double.valueOf(value));
+                                    break;
+                                 case Types.DOUBLE:
+                                    ps.setDouble(i + 1, Double.valueOf(value));
+                                    break;
+                                 case Types.FLOAT:
+                                    ps.setFloat(i + 1, Float.valueOf(value));
+                                    break;
+                                 case Types.INTEGER:
+                                    ps.setInt(i + 1, Integer.valueOf(value));
+                                    break;
+                                 case Types.LONGVARBINARY:
+                                    ps.setBytes(i + 1, DatatypeConverter.parseHexBinary(value.substring(2)));
+                                    break;
+                                 case Types.LONGVARCHAR:
+                                    ps.setString(i + 1, value);
+                                    break;
+                                 case Types.NUMERIC:
+                                    ps.setDouble(i + 1, Double.valueOf(value));
+                                    break;
+                                 case Types.REAL:
+                                    ps.setFloat(i + 1, Float.valueOf(value));
+                                    break;
+                                 case Types.SMALLINT:
+                                    ps.setShort(i + 1, Short.valueOf(value));
+                                    break;
+                                 case Types.TIME:
+                                 case Types.TIME_WITH_TIMEZONE:
+                                    ps.setTime(i + 1, java.sql.Time.valueOf(value));
+                                    break;
+                                 case Types.TIMESTAMP:
+                                 case Types.TIMESTAMP_WITH_TIMEZONE:
+                                    ps.setTimestamp(i + 1, java.sql.Timestamp.valueOf(value));
+                                    break;
+                                 case Types.TINYINT:
+                                    ps.setShort(i + 1, Short.valueOf(value));
+                                    break;
+                                 case Types.VARBINARY:
+                                    ps.setBytes(i + 1, DatatypeConverter.parseHexBinary(value.substring(2)));
+                                    break;
+                                 case Types.VARCHAR:
+                                    ps.setString(i + 1, value);
+                                    break;
+                                 default:
+                                    System.out.println("Unsupported value: " + type);
+                                    break;
+                              }
                            }
                         }
                      }
