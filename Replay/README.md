@@ -26,6 +26,8 @@ wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlpa
 
 Download from the [PostgreSQL JDBC](https://jdbc.postgresql.org/download.html) web site.
 
+Alternative JDBC driver: [pgjdbc-ng](http://impossibl.github.io/pgjdbc-ng/).
+
 ## Usage
 
 ### Configure PostgreSQL
@@ -97,9 +99,9 @@ cd /path/to/work_area
 
 Options:
 
-`-r`: Iterate through `ResultSet` instances
-`-s`: Run a single client at a time
-`-x`: Use 2-phase semantics for transaction support
+* `-r`: Iterate through `ResultSet` instances
+* `-s`: Run a single client at a time
+* `-x`: Use 2-phase semantics for transaction support
 
 ## Result
 

@@ -166,6 +166,16 @@ public class Replay
                lle.add(le);
                data.put(le.getProcessId(), lle);
             }
+            else if (le.isStmt())
+            {
+               execute = false;
+
+               List<LogEntry> lle = data.get(le.getProcessId());
+               if (lle == null)
+                  lle = new ArrayList<>();
+               lle.add(le);
+               data.put(le.getProcessId(), lle);
+            }
          }
       }
       finally
@@ -192,7 +202,7 @@ public class Replay
          for (int i = 0; i < lle.size(); i++)
          {
             LogEntry le = lle.get(i);
-            if (le.isExecute())
+            if (le.isExecute() || le.isStmt())
             {
                DataEntry de = new DataEntry();
                de.setPrepared(le.isPrepared());
@@ -1179,6 +1189,7 @@ public class Replay
       private boolean bind;
       private boolean execute;
       private boolean parameters;
+      private boolean stmt;
       
       LogEntry(String s)
       {
@@ -1199,6 +1210,7 @@ public class Replay
          this.bind = false;
          this.execute = false;
          this.parameters = false;
+         this.stmt = false;
 
          if (!parse)
          {
@@ -1209,6 +1221,10 @@ public class Replay
                if (!execute)
                {
                   this.parameters = isParameters(this.fullStatement);
+                  if (!parameters)
+                  {
+                     this.stmt = isStmt(this.fullStatement);
+                  }
                }
             }
          }
@@ -1259,6 +1275,11 @@ public class Replay
          return parameters;
       }
       
+      boolean isStmt()
+      {
+         return stmt;
+      }
+
       /**
        * Is parse
        * @param line The log line
@@ -1266,21 +1287,12 @@ public class Replay
        */
       private boolean isParse(String line)
       {
-         int offset = line.indexOf("parse <");
+         int offset = line.indexOf("parse ");
          if (offset != -1)
          {
             statement = line.substring(line.indexOf(":", offset) + 2);
             statement = statement.replaceAll("\\$[0-9]*", "?");
-            prepared = statement.indexOf("?") != -1;
-            return true;
-         }
-
-         offset = line.indexOf("parse S");
-         if (offset != -1)
-         {
-            statement = line.substring(line.indexOf(":", offset) + 2);
-            statement = statement.replaceAll("\\$[0-9]*", "?");
-            prepared = statement.indexOf("?") != -1;
+            prepared = line.indexOf("<unnamed>") != -1;
             return true;
          }
       
@@ -1294,21 +1306,12 @@ public class Replay
        */
       private boolean isBind(String line)
       {
-         int offset = line.indexOf("bind <");
+         int offset = line.indexOf("bind ");
          if (offset != -1)
          {
             statement = line.substring(line.indexOf(":", offset) + 2);
             statement = statement.replaceAll("\\$[0-9]*", "?");
-            prepared = statement.indexOf("?") != -1;
-            return true;
-         }
-
-         offset = line.indexOf("bind S");
-         if (offset != -1)
-         {
-            statement = line.substring(line.indexOf(":", offset) + 2);
-            statement = statement.replaceAll("\\$[0-9]*", "?");
-            prepared = statement.indexOf("?") != -1;
+            prepared = line.indexOf("<unnamed>") != -1;
             return true;
          }
       
@@ -1322,21 +1325,12 @@ public class Replay
        */
       private boolean isExecute(String line)
       {
-         int offset = line.indexOf("execute <");
+         int offset = line.indexOf("execute ");
          if (offset != -1)
          {
             statement = line.substring(line.indexOf(":", offset) + 2);
             statement = statement.replaceAll("\\$[0-9]*", "?");
-            prepared = statement.indexOf("?") != -1;
-            return true;
-         }
-         
-         offset = line.indexOf("execute S");
-         if (offset != -1)
-         {
-            statement = line.substring(line.indexOf(":", offset) + 2);
-            statement = statement.replaceAll("\\$[0-9]*", "?");
-            prepared = statement.indexOf("?") != -1;
+            prepared = line.indexOf("<unnamed>") != -1;
             return true;
          }
          
@@ -1361,6 +1355,25 @@ public class Replay
          return false;
       }
       
+      /**
+       * Is stmt
+       * @param line The log line
+       * @return True if stmt, otherwise false
+       */
+      private boolean isStmt(String line)
+      {
+         int offset = line.indexOf("statement:");
+         if (offset != -1)
+         {
+            statement = line.substring(line.indexOf(":", offset) + 2);
+            statement = statement.replaceAll("\\$[0-9]*", "?");
+            prepared = false;
+            return true;
+         }
+
+         return false;
+      }
+
       @Override
       public String toString()
       {
