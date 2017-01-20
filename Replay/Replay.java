@@ -27,6 +27,7 @@ import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.LineNumberReader;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -49,6 +50,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import javax.sql.XAConnection;
+import javax.sql.XADataSource;
+import javax.transaction.xa.XAResource;
+import javax.transaction.xa.Xid;
 import javax.xml.bind.DatatypeConverter;
 
 import net.sf.jsqlparser.expression.JdbcParameter;
@@ -97,6 +102,15 @@ public class Replay
 
    /** Parallel execution */
    private static boolean parallelExecution = true;
+
+   /** XA */
+   private static boolean xa = false;
+
+   /** XADataSource */
+   private static XADataSource xaDataSource = null;
+
+   /** NG driver */
+   private static boolean ngDriver = false;
 
    /**
     * Write data to a file
@@ -182,7 +196,21 @@ public class Replay
             {
                DataEntry de = new DataEntry();
                de.setPrepared(le.isPrepared());
-               de.setStatement(le.getStatement());
+
+               String stmt = le.getStatement();
+               if (stmt.startsWith("PREPARE TRANSACTION"))
+               {
+                  continue;
+               }
+               else if (stmt.startsWith("COMMIT PREPARED"))
+               {
+                  stmt = "COMMIT";
+               }
+               else if (stmt.startsWith("ROLLBACK PREPARED"))
+               {
+                  stmt = "ROLLBACK";
+               }
+               de.setStatement(stmt);
 
                if (i < lle.size() - 1)
                {
@@ -501,7 +529,7 @@ public class Replay
     * @param user The database user
     * @param password The password
     */
-   private static void executeClients(String url, String user, String password) throws Exception
+   private static void executeClients() throws Exception
    {
       File directory = new File(profilename);
       File[] clientData = directory.listFiles(new FilenameFilter()
@@ -537,9 +565,9 @@ public class Replay
             statements++;
          }
 
-         clients.add(new Client(f.getName(), interaction,
-                                clientReady, clientRun, clientDone,
-                                url, user, password));
+         clients.add(new Client(Integer.valueOf(f.getName().substring(0, f.getName().indexOf("."))),
+                                interaction,
+                                clientReady, clientRun, clientDone));
       }
 
       if (parallelExecution)
@@ -638,6 +666,56 @@ public class Replay
    }
 
    /**
+    * Get a XAConnection
+    * @return The connection
+    */
+   private static synchronized XAConnection getXAConnection() throws Exception
+   {
+      if (xaDataSource == null)
+      {
+         String host = configuration.getProperty("host", "localhost");
+         int port = Integer.valueOf(configuration.getProperty("port", "5432"));
+         String database = configuration.getProperty("database");
+
+         if (!ngDriver)
+         {
+            Class<?> clz = Class.forName("org.postgresql.xa.PGXADataSource");
+            Object obj = clz.newInstance();
+
+            Method mHost = clz.getMethod("setServerName", String.class);
+            mHost.invoke(obj, host);
+
+            Method mPort = clz.getMethod("setPortNumber", int.class);
+            mPort.invoke(obj, port);
+
+            Method mDatabase = clz.getMethod("setDatabaseName", String.class);
+            mDatabase.invoke(obj, database);
+
+            xaDataSource = (XADataSource)obj;
+         }
+         else
+         {
+            Class<?> clz = Class.forName("com.impossibl.postgres.jdbc.xa.PGXADataSource");
+            Object obj = clz.newInstance();
+
+            Method mHost = clz.getMethod("setHost", String.class);
+            mHost.invoke(obj, host);
+
+            Method mPort = clz.getMethod("setPort", int.class);
+            mPort.invoke(obj, port);
+
+            Method mDatabase = clz.getMethod("setDatabase", String.class);
+            mDatabase.invoke(obj, database);
+
+            xaDataSource = (XADataSource)obj;
+         }
+      }
+
+      return xaDataSource.getXAConnection(configuration.getProperty("user"),
+                                          configuration.getProperty("password"));
+   }
+
+   /**
     * Main
     * @param args The arguments
     */
@@ -648,8 +726,8 @@ public class Replay
       {
          if (args.length != 1 && args.length != 2)
          {
-            System.out.println("Usage: Replay -i <log_file>       (init)");
-            System.out.println("       Replay [-r] [-s] <profile> (run)");
+            System.out.println("Usage: Replay -i <log_file>            (init)");
+            System.out.println("       Replay [-r] [-s] [-x] <profile> (run)");
             return;
          }
 
@@ -660,20 +738,36 @@ public class Replay
          
          if (configuration.getProperty("url") == null)
          {
-            String host = configuration.getProperty("host", "localhost");
-            int port = Integer.valueOf(configuration.getProperty("port", "5432"));
             String database = configuration.getProperty("database");
             if (database == null)
             {
                System.out.println("database not defined.");
                return;
             }
-         
-            url = "jdbc:postgresql://" + host + ":" + port + "/" + database;
+
+            url = "jdbc:postgresql://" + configuration.getProperty("host", "localhost") +
+               ":" + configuration.getProperty("port", "5432") + "/" + database;
          }
          else
          {
             url = configuration.getProperty("url");
+
+            int doubleSlash = url.indexOf("//");
+            int slash = url.indexOf("/", doubleSlash + 2);
+            int col = url.indexOf(":", doubleSlash);
+            String host = url.substring(doubleSlash + 2, col != -1 ? col : slash);
+            String port = "5432";
+            String database = url.substring(slash + 1);
+
+            if (col != -1)
+               port = url.substring(col + 1, slash);
+
+            if (url.indexOf(":pgsql:") != -1)
+               ngDriver = true;
+
+            configuration.setProperty("host", host);
+            configuration.setProperty("port", port);
+            configuration.setProperty("database", database);
          }
 
          String user = configuration.getProperty("user");
@@ -716,11 +810,15 @@ public class Replay
                {
                   parallelExecution = false;
                }
+               else if ("-x".equals(args[parameter]))
+               {
+                  xa = true;
+               }
             }
 
             profilename = args[args.length - 1];
 
-            executeClients(url, user, password);
+            executeClients();
          }
       }
       catch (Exception e)
@@ -749,7 +847,7 @@ public class Replay
    static class Client implements Runnable
    {
       /** Identifier */
-      private String identifier;
+      private int identifier;
 
       /** Interaction data */
       private List<DataEntry> interaction;
@@ -762,15 +860,6 @@ public class Replay
 
       /** Client done */
       private CountDownLatch clientDone;
-
-      /** URL */
-      private String url;
-
-      /** User */
-      private String user;
-
-      /** Password */
-      private String password;
 
       /** Success */
       private boolean success;
@@ -790,18 +879,14 @@ public class Replay
       /**
        * Constructor
        */
-      Client(String identifier, List<DataEntry> interaction,
-             CountDownLatch clientReady, CountDownLatch clientRun, CountDownLatch clientDone,
-             String url, String user, String password)
+      Client(int identifier, List<DataEntry> interaction,
+             CountDownLatch clientReady, CountDownLatch clientRun, CountDownLatch clientDone)
       {
          this.identifier = identifier;
          this.interaction = interaction;
          this.clientReady = clientReady;
          this.clientRun = clientRun;
          this.clientDone = clientDone;
-         this.url = url;
-         this.user = user;
-         this.password = password;
          this.success = false;
       }
 
@@ -809,7 +894,7 @@ public class Replay
        * Get id
        * @return The value
        */
-      String getId()
+      int getId()
       {
          return identifier;
       }
@@ -847,11 +932,43 @@ public class Replay
       public void run()
       {
          beforeConnection = System.currentTimeMillis();
+         XAConnection xc = null;
+         Xid xid = null;
          Connection c = null;
          DataEntry de = null;
          try
          {
-            c = DriverManager.getConnection(url, user, password);
+            try
+            {
+               if (xa)
+               {
+                  xc = getXAConnection();
+                  c = xc.getConnection();
+                  xid = new XidImpl(identifier);
+               }
+               else
+               {
+                  String url = null;
+                  if (!ngDriver)
+                  {
+                     url = "jdbc:postgresql://" + configuration.getProperty("host", "localhost") + ":" +
+                        configuration.getProperty("port", "5432") + "/" + configuration.getProperty("database");
+                  }
+                  else
+                  {
+                     url = "jdbc:pgsql://" + configuration.getProperty("host", "localhost") + ":" +
+                        configuration.getProperty("port", "5432") + "/" + configuration.getProperty("database");
+                  }
+
+                  c = DriverManager.getConnection(url, configuration.getProperty("user"),
+                                                  configuration.getProperty("password"));
+               }
+            }
+            catch (Exception ce)
+            {
+               clientReady.countDown();
+               throw ce;
+            }
 
             clientReady.countDown();
             clientRun.await();
@@ -863,15 +980,37 @@ public class Replay
                if ("BEGIN".equals(de.getStatement()))
                {
                   c.setAutoCommit(false);
+                  if (xa)
+                  {
+                     xc.getXAResource().start(xid, XAResource.TMNOFLAGS);
+                  }
                }
                else if ("ROLLBACK".equals(de.getStatement()))
                {
-                  c.rollback();
+                  if (xa)
+                  {
+                     xc.getXAResource().end(xid, XAResource.TMFAIL);
+                     xc.getXAResource().prepare(xid);
+                     xc.getXAResource().rollback(xid);
+                  }
+                  else
+                  {
+                     c.rollback();
+                  }
                   c.setAutoCommit(true);
                }
                else if ("COMMIT".equals(de.getStatement()))
                {
-                  c.commit();
+                  if (xa)
+                  {
+                     xc.getXAResource().end(xid, XAResource.TMSUCCESS);
+                     xc.getXAResource().prepare(xid);
+                     xc.getXAResource().commit(xid, false);
+                  }
+                  else
+                  {
+                     c.commit();
+                  }
                   c.setAutoCommit(true);
                }
                else
@@ -1396,6 +1535,73 @@ public class Replay
       public String toString()
       {
          return getData().toString();
+      }
+   }
+
+   /**
+    * Basic Xid implementation
+    */
+   static class XidImpl implements Xid
+   {
+      private int id;
+
+      /**
+       * Constructor
+       * @param id The identifier
+       */
+      public XidImpl(int id)
+      {
+         this.id = id;
+      }
+
+      /**
+       * {@inheritDoc}
+       */
+      public int getFormatId()
+      {
+         return id;
+      }
+
+      /**
+       * {@inheritDoc}
+       */
+      public byte[] getGlobalTransactionId()
+      {
+         return new byte[] {(byte)(id >>> 24), (byte)(id >>> 16), (byte)(id >>> 8), (byte)id};
+      }
+
+      /**
+       * {@inheritDoc}
+       */
+      public byte[] getBranchQualifier()
+      {
+         return new byte[] {(byte)(id >>> 24), (byte)(id >>> 16), (byte)(id >>> 8), (byte)id};
+      }
+
+      /**
+       * {@inheritDoc}
+       */
+      @Override
+      public int hashCode()
+      {
+         return id;
+      }
+
+      /**
+       * {@inheritDoc}
+       */
+      @Override
+      public boolean equals(Object other)
+      {
+         if (other == this)
+            return true;
+
+         if (other == null || !(other instanceof XidImpl))
+            return false;
+
+         XidImpl x = (XidImpl)other;
+
+         return id == x.id;
       }
    }
 }

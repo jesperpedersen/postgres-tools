@@ -95,6 +95,12 @@ cd /path/to/work_area
 /path/to/java -classpath .:jsqlparser-0.9.6.jar:postgresql-9.4.1211.jar Replay postgresql
 ```
 
+Options:
+
+`-r`: Iterate through `ResultSet` instances
+`-s`: Run a single client at a time
+`-x`: Use 2-phase semantics for transaction support
+
 ## Result
 
 The result of the run is displayed in the console.
