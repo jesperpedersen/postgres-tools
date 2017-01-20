@@ -548,7 +548,7 @@ public class LogAnalyzer
                }
             }
          }
-         else if (le.isExecute())
+         else if (le.isExecute() || le.isStmt())
          {
             duration += le.getDuration();
             totalDuration += le.getDuration();
@@ -556,7 +556,14 @@ public class LogAnalyzer
             String s = le.getStatement();
             if (s != null)
             {
-               if (s.startsWith("COMMIT"))
+               if (s.startsWith("BEGIN") && le.isStmt())
+               {
+                  begin++;
+                  inTransaction = true;
+                  transactionTime = 0.0;
+                  beginLE = le;
+               }
+               else if (s.startsWith("COMMIT"))
                {
                   commit++;
                   idleInTransaction = Math.max(0, (le.timeAsLong() - (beginLE.timeAsLong() + (long)Math.ceil(transactionTime + le.getDuration()))));
@@ -999,7 +1006,7 @@ public class LogAnalyzer
 
       for (LogEntry le : lle)
       {
-         if (le.isExecute())
+         if (le.isExecute() || le.isStmt())
             count++;
       }
       
@@ -1063,7 +1070,7 @@ public class LogAnalyzer
                   }
                }
             }
-            else if (le.isExecute())
+            else if (le.isExecute() || le.isStmt())
             {
                executeTime += le.getDuration();
 
@@ -1122,7 +1129,10 @@ public class LogAnalyzer
     */
    private static boolean filterStatement(String stmt)
    {
-      if ("BEGIN".equals(stmt) || stmt.startsWith("ROLLBACK") || stmt.startsWith("COMMIT"))
+      if ("BEGIN".equals(stmt) ||
+          stmt.startsWith("ROLLBACK") ||
+          stmt.startsWith("COMMIT") ||
+          stmt.startsWith("PREPARE"))
          return true;
 
       return false;
@@ -1223,6 +1233,7 @@ public class LogAnalyzer
       private boolean parse;
       private boolean bind;
       private boolean execute;
+      private boolean stmt;
       
       LogEntry(String s)
       {
@@ -1245,6 +1256,7 @@ public class LogAnalyzer
          this.parse = isParse(this.fullStatement);
          this.bind = false;
          this.execute = false;
+         this.stmt = false;
 
          if (!parse)
          {
@@ -1252,6 +1264,10 @@ public class LogAnalyzer
             if (!bind)
             {
                this.execute = isExecute(this.fullStatement);
+               if (!execute)
+               {
+                  this.stmt = isStmt(this.fullStatement);
+               }
             }
          }
 
@@ -1334,6 +1350,11 @@ public class LogAnalyzer
          return execute;
       }
       
+      boolean isStmt()
+      {
+         return stmt;
+      }
+
       /**
        * Is parse
        * @param line The log line
@@ -1341,20 +1362,12 @@ public class LogAnalyzer
        */
       private boolean isParse(String line)
       {
-         int offset = line.indexOf("parse <");
+         int offset = line.indexOf("parse ");
          if (offset != -1)
          {
             statement = line.substring(line.indexOf(":", offset) + 2);
             statement = statement.replace('$', '?');
-            return true;
-         }
-
-         offset = line.indexOf("parse S");
-         if (offset != -1)
-         {
-            statement = line.substring(line.indexOf(":", offset) + 2);
-            statement = statement.replace('$', '?');
-            prepared = true;
+            prepared = line.indexOf("<unnamed>") != -1;
             return true;
          }
       
@@ -1368,20 +1381,12 @@ public class LogAnalyzer
        */
       private boolean isBind(String line)
       {
-         int offset = line.indexOf("bind <");
+         int offset = line.indexOf("bind ");
          if (offset != -1)
          {
             statement = line.substring(line.indexOf(":", offset) + 2);
             statement = statement.replace('$', '?');
-            return true;
-         }
-
-         offset = line.indexOf("bind S");
-         if (offset != -1)
-         {
-            statement = line.substring(line.indexOf(":", offset) + 2);
-            statement = statement.replace('$', '?');
-            prepared = true;
+            prepared = line.indexOf("<unnamed>") != -1;
             return true;
          }
       
@@ -1395,20 +1400,31 @@ public class LogAnalyzer
        */
       private boolean isExecute(String line)
       {
-         int offset = line.indexOf("execute <");
+         int offset = line.indexOf("execute ");
          if (offset != -1)
          {
             statement = line.substring(line.indexOf(":", offset) + 2);
             statement = statement.replace('$', '?');
+            prepared = line.indexOf("<unnamed>") != -1;
             return true;
          }
          
-         offset = line.indexOf("execute S");
+         return false;
+      }
+
+      /**
+       * Is stmt
+       * @param line The log line
+       * @return True if stmt, otherwise false
+       */
+      private boolean isStmt(String line)
+      {
+         int offset = line.indexOf("statement:");
          if (offset != -1)
          {
             statement = line.substring(line.indexOf(":", offset) + 2);
             statement = statement.replace('$', '?');
-            prepared = true;
+            prepared = false;
             return true;
          }
          
