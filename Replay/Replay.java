@@ -565,6 +565,11 @@ public class Replay
          List<DataEntry> interaction = new ArrayList<>();
 
          int i = 0;
+         while (l.get(i).startsWith("#"))
+         {
+            i++;
+         }
+
          while (i < l.size())
          {
             String prepared = l.get(i++);
