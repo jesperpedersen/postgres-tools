@@ -318,8 +318,22 @@ public class QueryAnalyzer
             l.add("<p>");
             l.add("<u><b>Suggestions</b></u>");
 
-            l.addAll(suggestionPrimaryKey(tableData, pkInfo, tableOn, tableWhere, tableSet));
-            l.addAll(suggestionIndexes(tableOn, tableWhere, tableSet));
+            try
+            {
+               l.addAll(suggestionPrimaryKey(tableData, pkInfo, tableOn, tableWhere, tableSet));
+            }
+            catch (Exception e)
+            {
+               l.add("(Primary Key) Exception: " + e.getMessage());
+            }
+            try
+            {
+               l.addAll(suggestionIndexes(tableOn, tableWhere, tableSet));
+            }
+            catch (Exception e)
+            {
+               l.add("(Indexes) Exception: " + e.getMessage());
+            }
          }
 
          if (debug && (tableWhere != null || tableOn != null))
@@ -371,12 +385,106 @@ public class QueryAnalyzer
     * @param query The executed query
     * @param usedTables The used tables
     * @param plan The plan
+    * @param types Types used in the prepared query
+    * @param values Values used in the prepared query
     */
    private static void writeReport(String queryId,
                                    String origQuery, String query,
                                    Set<String> usedTables,
-                                   String plan) throws Exception
+                                   String plan,
+                                   List<Integer> types,
+                                   List<String> values) throws Exception
    {
+      int number = -1;
+
+      // Replay integration
+      if (queryId.startsWith("query.select") ||
+          queryId.startsWith("query.update") ||
+          queryId.startsWith("query.delete"))
+      {
+         int factor = 10;
+         String ns = queryId.substring(queryId.lastIndexOf(".") + 1);
+         while (ns.charAt(0) == '0')
+         {
+            ns = ns.substring(1);
+            factor *= 10;
+         }
+
+         number = Integer.valueOf(ns);
+         boolean commit = true;
+         if (queryId.startsWith("query.select"))
+         {
+            number += 2 * factor;
+         }
+         else if (queryId.startsWith("query.update"))
+         {
+            number += 3 * factor;
+            commit = false;
+         }
+         else
+         {
+            number += 1 * factor;
+            commit = false;
+         }
+
+         List<String> cli = new ArrayList<>();
+         cli.add("#");
+         cli.add("# " + queryId);
+         cli.add("#");
+
+         cli.add("P");
+         cli.add("BEGIN");
+         cli.add("");
+         cli.add("");
+
+         cli.add("P");
+         cli.add(origQuery);
+         if (types.size() > 0)
+         {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < types.size(); i++)
+            {
+               sb = sb.append(types.get(i));
+               if (i < types.size() - 1)
+                  sb = sb.append("|");
+            }
+            cli.add(sb.toString());
+
+            sb = new StringBuilder();
+            for (int i = 0; i < values.size(); i++)
+            {
+               String v = values.get(i);
+
+               if (v.startsWith("'") && v.endsWith("'"))
+                  v = v.substring(1, v.length() - 1);
+
+               sb = sb.append(v);
+               if (i < values.size() - 1)
+                  sb = sb.append("|");
+            }
+            cli.add(sb.toString());
+         }
+         else
+         {
+            cli.add("");
+            cli.add("");
+         }
+
+         cli.add("P");
+         if (commit)
+         {
+            cli.add("COMMIT");
+         }
+         else
+         {
+            cli.add("ROLLBACK");
+         }
+         cli.add("");
+         cli.add("");
+
+         writeFile(Paths.get("report", number + ".cli"), cli);
+      }
+
       List<String> l = new ArrayList<>();
 
       l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
@@ -403,6 +511,14 @@ public class QueryAnalyzer
          l.add("<pre>");
          l.add(query);
          l.add("</pre>");
+      }
+
+      if (number != -1)
+      {
+         l.add("<p>");
+         l.add("<b>Replay:</b>");
+         l.add("<p>");
+         l.add("<a href=\"" + number + ".cli\">File</a>");
       }
 
       l.add("<h2>Plan</h2>");
@@ -600,11 +716,13 @@ public class QueryAnalyzer
          String origQuery = configuration.getProperty(key);
          String query = origQuery;
          String plan = "";
+         List<Integer> types = new ArrayList<>();
+         List<String> values = new ArrayList<>();
 
          try
          {
             if (query.indexOf("?") != -1)
-               query = rewriteQuery(c, key, query);
+               query = rewriteQuery(c, key, query, types, values);
 
             if (query != null)
             {
@@ -632,7 +750,7 @@ public class QueryAnalyzer
 
             Set<String> usedTables = getUsedTables(c, origQuery);
             
-            writeReport(key, origQuery, query, usedTables, plan);
+            writeReport(key, origQuery, query, usedTables, plan, types, values);
          }
          catch (Exception e)
          {
@@ -772,9 +890,12 @@ public class QueryAnalyzer
     * @param c The connection
     * @param queryId The query id
     * @param query The query
+    * @param types Types used in the prepared query
+    * @param values Values used in the prepared query
     * @return The new query
     */
-   private static String rewriteQuery(Connection c, String queryId, String query) throws Exception
+   private static String rewriteQuery(Connection c, String queryId, String query,
+                                      List<Integer> types, List<String> values) throws Exception
    {
       net.sf.jsqlparser.statement.Statement s = CCJSqlParserUtil.parse(query);
       
@@ -804,7 +925,13 @@ public class QueryAnalyzer
 
                try
                {
-                  this.getBuffer().append(getData(c, currentColumn));
+                  String data = getData(c, currentColumn);
+                  Integer type = getType(c, currentColumn, query);
+
+                  values.add(data);
+                  types.add(type);
+
+                  this.getBuffer().append(data);
                }
                catch (Exception e)
                {
@@ -926,7 +1053,7 @@ public class QueryAnalyzer
 
          for (String tableName : extraIndexes.keySet())
          {
-            Set<String> values = extraIndexes.get(tableName);
+            Set<String> vals = extraIndexes.get(tableName);
             
             if (aliases.containsKey(tableName))
                tableName = aliases.get(tableName);
@@ -939,7 +1066,7 @@ public class QueryAnalyzer
             if (l == null)
                l = new ArrayList<>();
 
-            for (String col : values)
+            for (String col : vals)
                l.add(col.toLowerCase());
 
             m.put(queryId, l);
@@ -1008,7 +1135,13 @@ public class QueryAnalyzer
             {
                try
                {
-                  this.getBuffer().append(getData(c, currentColumn));
+                  String data = getData(c, currentColumn);
+                  Integer type = getType(c, currentColumn, query);
+
+                  values.add(data);
+                  types.add(type);
+
+                  this.getBuffer().append(data);
                }
                catch (Exception e)
                {
@@ -1089,7 +1222,13 @@ public class QueryAnalyzer
             {
                try
                {
-                  this.getBuffer().append(getData(c, currentColumn));
+                  String data = getData(c, currentColumn);
+                  Integer type = getType(c, currentColumn, query);
+
+                  values.add(data);
+                  types.add(type);
+
+                  this.getBuffer().append(data);
                }
                catch (Exception e)
                {
@@ -1182,6 +1321,34 @@ public class QueryAnalyzer
          return "'" + o.toString() + "'";
       
       return o.toString();
+   }
+
+   /**
+    * Get type
+    * @param c The connection
+    * @param column The column
+    * @param query The query
+    * @return The value
+    */
+   private static Integer getType(Connection c, Column column, String query) throws Exception
+   {
+      String tableName = column.getTable().getName();
+
+      if (tableName != null && aliases.containsKey(tableName))
+         tableName = aliases.get(tableName);
+
+      if (tableName == null)
+         tableName = currentTableName;
+
+      Map<String, Integer> tableData = tables.get(tableName);
+
+      if (tableData == null)
+      {
+         getUsedTables(c, query);
+         tableData = tables.get(tableName);
+      }
+
+      return tableData.get(column.getColumnName().toLowerCase());
    }
 
    /**
@@ -1626,10 +1793,10 @@ public class QueryAnalyzer
    private static void readConfiguration(String config) throws Exception
    {
       File f = new File(config);
+      configuration = new Properties();
 
       if (f.exists())
       {
-         configuration = new Properties();
          FileInputStream fis = null;
          try
          {

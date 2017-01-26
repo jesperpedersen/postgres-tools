@@ -32,7 +32,7 @@ Download from the [PostgreSQL JDBC](https://jdbc.postgresql.org/download.html) w
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:postgresql-9.4.1207.jar:jsqlparser-0.9.6.jar QueryAnalyzer
+/path/to/java -classpath .:postgresql-9.4.1212.jar:jsqlparser-0.9.6.jar QueryAnalyzer
 ```
 
 ## Configuration
@@ -111,3 +111,5 @@ Each query report shows
 * The query
 * The executed query, if ```query``` contains ```?```
 * The ```EXPLAIN (ANALYZE, VERBOSE, BUFFERS ON)``` plan
+* The replay file
+* Overview of the tables / indexes for the query
