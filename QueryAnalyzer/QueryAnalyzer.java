@@ -402,12 +402,13 @@ public class QueryAnalyzer
           queryId.startsWith("query.update") ||
           queryId.startsWith("query.delete"))
       {
-         int factor = 10;
+         int factor = 100;
          String ns = queryId.substring(queryId.lastIndexOf(".") + 1);
          while (ns.charAt(0) == '0')
          {
             ns = ns.substring(1);
-            factor *= 10;
+            if (ns.charAt(0) == '0')
+               factor *= 10;
          }
 
          number = Integer.valueOf(ns);
