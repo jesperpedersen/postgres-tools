@@ -1045,6 +1045,9 @@ public class QueryAnalyzer
                Limit limit = new Limit();
                limit.setRowCount(1L);
                plainSelect.setLimit(limit);
+
+               values.add(Integer.toString(1));
+               types.add(Integer.valueOf(Types.INTEGER));
             }
 
             select.setSelectBody(plainSelect);
