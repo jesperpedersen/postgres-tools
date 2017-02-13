@@ -2,7 +2,7 @@
 #
 # The MIT License (MIT)
 #
-# Copyright (c) 2016 Jesper Pedersen <jesper.pedersen@comcast.net>
+# Copyright (c) 2017 Jesper Pedersen <jesper.pedersen@comcast.net>
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the "Software"),
@@ -114,7 +114,7 @@ function pgbench_1pc_standard()
         echo "" >> $FILE
     done
     echo -n "1PC "$1"/"$2": " >> $DATE-$HEAD-wal.txt
-    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
+    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_wal_location_diff(pg_current_wal_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
 }
 
 function pgbench_1pc_prepared()
@@ -127,7 +127,7 @@ function pgbench_1pc_prepared()
         echo "" >> $FILE
     done
     echo -n "1PCP "$1"/"$2": " >> $DATE-$HEAD-wal.txt
-    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
+    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_wal_location_diff(pg_current_wal_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
 }
 
 function pgbench_readonly()
@@ -140,7 +140,7 @@ function pgbench_readonly()
         echo "" >> $FILE
     done
     echo -n "RO "$1"/"$2": " >> $DATE-$HEAD-wal.txt
-    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
+    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_wal_location_diff(pg_current_wal_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
 }
 
 function pgbench_2pc_standard()
@@ -153,7 +153,7 @@ function pgbench_2pc_standard()
         echo "" >> $FILE
     done
     echo -n "2PC "$1"/"$2": " >> $DATE-$HEAD-wal.txt
-    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
+    $PGSQL_ROOT/bin/psql -h $HOST -p $PORT -c "SELECT pg_size_pretty(pg_wal_location_diff(pg_current_wal_location(), '0/0'));" pgbench | tail -3 | head -1 >> $DATE-$HEAD-wal.txt
 }
 
 postgresql_stop
