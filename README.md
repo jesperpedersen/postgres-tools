@@ -41,6 +41,10 @@ Analysis of queries sent
 
 Replay of SQL sent by an application
 
+### ResolveAddress
+
+Resolve addresses using eu-addr2line in a flamegraph input file
+
 ### ShrinkLog
 
 Shrink a PostgreSQL log
