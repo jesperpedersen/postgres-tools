@@ -455,7 +455,7 @@ public class GenerateReports
       l.add("<html>");
       l.add(" <head>");
       l.add("  <title>PostgreSQL Performance - " + date + "</title>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined-dev.js\"></script>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
       l.add(" </head>");
       l.add(" <body>");
       l.add("  <h1>Date: " + date + "</h1>");
@@ -593,7 +593,7 @@ public class GenerateReports
       l.add("<html>");
       l.add(" <head>");
       l.add("  <title>PostgreSQL Performance - Daily Reports</title>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined-dev.js\"></script>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
       l.add(" </head>");
       l.add(" <body>");
       l.add("  <h1>Daily Reports</h1>");
@@ -657,7 +657,7 @@ public class GenerateReports
       l.add("<html>");
       l.add(" <head>");
       l.add("  <title>PostgreSQL Performance - Max Reports</title>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined-dev.js\"></script>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
       l.add(" </head>");
       l.add(" <body>");
       l.add("  <h1>Max Reports</h1>");
@@ -929,7 +929,7 @@ public class GenerateReports
       l.add("<html>");
       l.add("<head>");
       l.add("<title>PostgreSQL Performance - Max: " + name + "</title>");
-      l.add("<script type=\"text/javascript\" src=\"dygraph-combined-dev.js\"></script>");
+      l.add("<script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
       l.add("</head>");
       l.add("<body>");
       l.add("<h1>Max: " + name + "</h1>");
@@ -1053,7 +1053,7 @@ public class GenerateReports
       l.add("<html>");
       l.add(" <head>");
       l.add("  <title>PostgreSQL Performance - Profile Reports</title>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined-dev.js\"></script>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
       l.add(" </head>");
       l.add(" <body>");
       l.add("  <h1>Profile Reports</h1>");
@@ -1090,7 +1090,7 @@ public class GenerateReports
       l.add("<html>");
       l.add("<head>");
       l.add("<title>PostgreSQL Performance - Profile: " + name + "</title>");
-      l.add("<script type=\"text/javascript\" src=\"dygraph-combined-dev.js\"></script>");
+      l.add("<script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
       l.add("</head>");
       l.add("<body>");
       l.add("<h1>Profile: " + name + "</h1>");
@@ -1189,7 +1189,7 @@ public class GenerateReports
       l.add("<html>");
       l.add("<head>");
       l.add("  <title>PostgreSQL Performance</title>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined-dev.js\"></script>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
       l.add("</head>");
       l.add("<body>");
       l.add("<h1>PostgreSQL Performance</h1>");
@@ -1351,7 +1351,7 @@ public class GenerateReports
       File report = new File("report");
       report.mkdir();
          
-      Files.copy(Paths.get("dygraph-combined-dev.js"), Paths.get("report", "dygraph-combined-dev.js"), StandardCopyOption.REPLACE_EXISTING);
+      Files.copy(Paths.get("dygraph-combined.js"), Paths.get("report", "dygraph-combined.js"), StandardCopyOption.REPLACE_EXISTING);
    }
 
    /**
