@@ -67,7 +67,7 @@ Both files just needs to contain a HTML fragment, as they are included in the ge
 
 ```bash
 cd /path/to/work_area
-/path/to/java GenerateReports
+/path/to/java CronRun
 ```
 
 Compile with ```javac``` before use.
