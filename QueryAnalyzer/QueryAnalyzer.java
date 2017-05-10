@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2016 Jesper Pedersen <jesper.pedersen@comcast.net>
+ * Copyright (c) 2017 Jesper Pedersen <jesper.pedersen@comcast.net>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -108,10 +108,10 @@ public class QueryAnalyzer
    private static Map<String, Map<String, Integer>> tables = new TreeMap<>();
    
    /** Indexes:       Table       Index   Columns */
-   private static Map<String, Map<String, Set<String>>> indexes = new TreeMap<>();
+   private static Map<String, Map<String, List<String>>> indexes = new TreeMap<>();
    
    /** Primary key:   Table   Columns */
-   private static Map<String, Set<String>> primaryKeys = new TreeMap<>();
+   private static Map<String, List<String>> primaryKeys = new TreeMap<>();
 
    /** ON/IN usage:   Table       Query   Columns */
    private static Map<String, Map<String, Set<String>>> on = new TreeMap<>();
@@ -224,7 +224,7 @@ public class QueryAnalyzer
          l.add("<h2>" + tableName + "</h2>");
 
          Map<String, Integer> tableData = tables.get(tableName);
-         Set<String> pkInfo = primaryKeys.get(tableName);
+         List<String> pkInfo = primaryKeys.get(tableName);
 
          l.add("<table>");
          for (String columnName : tableData.keySet())
@@ -264,7 +264,7 @@ public class QueryAnalyzer
             l.add("None");
          }
          
-         Map<String, Set<String>> indexData = indexes.get(tableName);
+         Map<String, List<String>> indexData = indexes.get(tableName);
          l.add("<p>");
          l.add("<u><b>Indexes</b></u>");
          if (indexData.size() > 0)
@@ -324,7 +324,11 @@ public class QueryAnalyzer
             }
             catch (Exception e)
             {
-               l.add("(Primary Key) Exception: " + e.getMessage());
+               l.add("<p><b><u>Primary Key</u></b><p>Exception: " + e.getMessage() + "<br/>");
+               for (StackTraceElement ste : e.getStackTrace())
+               {
+                  l.add(ste.getClassName() + ":" + ste.getLineNumber() + "<br/>");
+               }
             }
             try
             {
@@ -332,7 +336,11 @@ public class QueryAnalyzer
             }
             catch (Exception e)
             {
-               l.add("(Indexes) Exception: " + e.getMessage());
+               l.add("<p><b><u>Indexes</u></b><p>Exception: " + e.getMessage() + "<br/>");
+               for (StackTraceElement ste : e.getStackTrace())
+               {
+                  l.add(ste.getClassName() + ":" + ste.getLineNumber() + "<br/>");
+               }
             }
          }
 
@@ -535,7 +543,7 @@ public class QueryAnalyzer
       for (String tableName : usedTables)
       {
          Map<String, Integer> tableData = tables.get(tableName);
-         Set<String> pkInfo = primaryKeys.get(tableName);
+         List<String> pkInfo = primaryKeys.get(tableName);
          if (tableData != null)
          {
             l.add("<h3>" + tableName + "</h3>");
@@ -562,8 +570,8 @@ public class QueryAnalyzer
       l.add("<h2>Indexes</h2>");
       for (String tableName : usedTables)
       {
-         Map<String, Set<String>> indexData = indexes.get(tableName);
-         Set<String> pkInfo = primaryKeys.get(tableName);
+         Map<String, List<String>> indexData = indexes.get(tableName);
+         List<String> pkInfo = primaryKeys.get(tableName);
          if (indexData.size() > 0)
          {
             l.add("<h3>" + tableName + "</h3>");
@@ -631,26 +639,26 @@ public class QueryAnalyzer
       l.add("");
 
       //  Table       Column  Indexes
-      Map<String, Map<String, Set<String>>> m = new TreeMap<>();
+      Map<String, Map<String, List<String>>> m = new TreeMap<>();
 
       for (Map.Entry<String, Set<String>> sEntry : set.entrySet())
       {
-         Map<String, Set<String>> tIndexes = indexes.get(sEntry.getKey());
+         Map<String, List<String>> tIndexes = indexes.get(sEntry.getKey());
          if (tIndexes != null && !tIndexes.isEmpty())
          {
-            for (Map.Entry<String, Set<String>> idxEntry : tIndexes.entrySet())
+            for (Map.Entry<String, List<String>> idxEntry : tIndexes.entrySet())
             {
                for (String col : sEntry.getValue())
                {
                   if (idxEntry.getValue().contains(col))
                   {
-                     Map<String, Set<String>> d = m.get(sEntry.getKey());
+                     Map<String, List<String>> d = m.get(sEntry.getKey());
                      if (d == null)
                         d = new TreeMap<>();
 
-                     Set<String> idxs = d.get(col);
+                     List<String> idxs = d.get(col);
                      if (idxs == null)
-                        idxs = new TreeSet<>();
+                        idxs = new ArrayList<>();
 
                      idxs.add(idxEntry.getKey());
                      d.put(col, idxs);
@@ -661,7 +669,7 @@ public class QueryAnalyzer
          }
       }
 
-      for (Map.Entry<String, Map<String, Set<String>>> entry : m.entrySet())
+      for (Map.Entry<String, Map<String, List<String>>> entry : m.entrySet())
       {
          l.add("<h2>" + entry.getKey() + "</h2>");
          l.add("<table>");
@@ -670,7 +678,7 @@ public class QueryAnalyzer
          l.add("<td><b>Index(es)</b></td>");
          l.add("</tr>");
 
-         for (Map.Entry<String, Set<String>> te : entry.getValue().entrySet())
+         for (Map.Entry<String, List<String>> te : entry.getValue().entrySet())
          {
             l.add("<tr>");
             l.add("<td>" + te.getKey() + "</td>");
@@ -774,7 +782,7 @@ public class QueryAnalyzer
     * @return The report data
     */
    private static List<String> suggestionPrimaryKey(Map<String, Integer> tableData,
-                                                    Set<String> pkInfo,
+                                                    List<String> pkInfo,
                                                     Map<String, Set<String>> tableOn,
                                                     Map<String, List<String>> tableWhere,
                                                     Set<String> tableSet)
@@ -836,47 +844,96 @@ public class QueryAnalyzer
                                                  Set<String> tableSet)
    {
       List<String> result = new ArrayList<>();
-      Set<String> suggested = new HashSet<>();
+      Set<List<String>> suggested = new HashSet<>();
+      TreeMap<Integer, List<List<String>>> counts = new TreeMap<>();
 
       result.add("<p>");
       result.add("<b><u>Indexes</u></b>");
       result.add("<table>");
 
-      int idx = 1;
-
-      if (tableOn != null)
-      {
-         for (Set<String> s : tableOn.values())
-         {
-            for (String columnName : s)
-            {
-               if (!suggested.contains(columnName))
-               {
-                  result.add("<tr>");
-                  result.add("<td>IDX" + idx + "</td>");
-                  result.add("<td>" + columnName + "</td>");
-                  result.add("</tr>");
-                  suggested.add(columnName);
-                  idx++;
-               }
-            }
-         }
-      }
-
       if (tableWhere != null)
       {
          for (List<String> l : tableWhere.values())
          {
-            String columnName = l.get(0);
+            Integer c = l.size();
+            List<List<String>> ll = counts.get(c);
+            if (ll == null)
+               ll = new ArrayList<>();
 
-            if (!suggested.contains(columnName))
+            ll.add(l);
+            counts.put(c, ll);
+         }
+      }
+
+      if (tableOn != null)
+      {
+         for (Set<String> ss : tableOn.values())
+         {
+            for (String s : ss)
             {
-               result.add("<tr>");
-               result.add("<td>IDX" + idx + "</td>");
-               result.add("<td>" + columnName + "</td>");
-               result.add("</tr>");
-               suggested.add(columnName);
-               idx++;
+               List l = new ArrayList<>(1);
+               l.add(s);
+
+               Integer c = Integer.valueOf(1);
+               List<List<String>> ll = counts.get(c);
+               if (ll == null)
+                  ll = new ArrayList<>();
+
+               ll.add(l);
+               counts.put(c, ll);
+            }
+         }
+      }
+
+      int idx = 1;
+
+      for (Integer count : counts.descendingKeySet())
+      {
+         List<List<String>> ll = counts.get(count);
+         for (List<String> l : ll)
+         {
+            boolean include = true;
+
+            if (l.size() == 1)
+            {
+               String val = l.get(0);
+
+               for (List<String> s : suggested)
+               {
+                  if (val.equals(s.get(0)) || (tableSet != null && !tableSet.isEmpty() && tableSet.contains(val)))
+                     include = false;
+               }
+            }
+
+            if (include && suggested.contains(l))
+               include = false;
+
+            if (include)
+            {
+               List<String> newIndex = new ArrayList<>();
+               for (int i = 0; i < l.size(); i++)
+               {
+                  String col = l.get(i);
+                  if (tableSet != null && i > 0)
+                  {
+                     if (!tableSet.contains(col))
+                        newIndex.add(col);
+                  }
+                  else
+                  {
+                     newIndex.add(col);
+                  }
+               }
+
+               if (newIndex.size() > 0)
+               {
+                  result.add("<tr>");
+                  result.add("<td>IDX" + idx + "</td>");
+                  result.add("<td>" + newIndex + "</td>");
+                  result.add("</tr>");
+                  suggested.add(newIndex);
+                  idx++;
+               }
             }
          }
       }
@@ -1697,6 +1754,8 @@ public class QueryAnalyzer
                while (rs.next())
                {
                   String columnName = rs.getString("COLUMN_NAME");
+                  columnName = columnName.toLowerCase();
+
                   int dataType = rs.getInt("DATA_TYPE");
                   tableData.put(columnName, dataType);
                }
@@ -1722,7 +1781,7 @@ public class QueryAnalyzer
             try
             {
                DatabaseMetaData dmd = c.getMetaData();
-               Map<String, Set<String>> indexInfo = new TreeMap<>();
+               Map<String, List<String>> indexInfo = new TreeMap<>();
 
                rs = dmd.getIndexInfo(null, null, tableName.toLowerCase(), false, false);
                while (rs.next())
@@ -1730,11 +1789,15 @@ public class QueryAnalyzer
                   String indexName = rs.getString("INDEX_NAME");
                   String columnName = rs.getString("COLUMN_NAME");
 
-                  Set<String> existing = indexInfo.get(indexName);
-                  if (existing == null)
-                     existing = new TreeSet<>();
+                  indexName = indexName.toLowerCase();
+                  columnName = columnName.toLowerCase();
 
-                  existing.add(columnName);
+                  List<String> existing = indexInfo.get(indexName);
+                  if (existing == null)
+                     existing = new ArrayList<>();
+
+                  if (!existing.contains(columnName))
+                     existing.add(columnName);
                   indexInfo.put(indexName, existing);
                }
 
@@ -1759,13 +1822,16 @@ public class QueryAnalyzer
             try
             {
                DatabaseMetaData dmd = c.getMetaData();
-               Set<String> pkInfo = new TreeSet<>();
+               List<String> pkInfo = new ArrayList<>();
 
                rs = dmd.getPrimaryKeys(null, null, tableName.toLowerCase());
                while (rs.next())
                {
                   String columnName = rs.getString("COLUMN_NAME");
-                  pkInfo.add(columnName);
+                  columnName = columnName.toLowerCase();
+
+                  if (!pkInfo.contains(columnName))
+                     pkInfo.add(columnName);
                }
 
                primaryKeys.put(tableName, pkInfo);
@@ -1972,7 +2038,7 @@ public class QueryAnalyzer
             if (cols == null)
                cols = new TreeSet<>();
 
-            cols.add(column.getColumnName());
+            cols.add(column.getColumnName().toLowerCase());
             m.put(queryId, cols);
             on.put(tableName, m);
          }
