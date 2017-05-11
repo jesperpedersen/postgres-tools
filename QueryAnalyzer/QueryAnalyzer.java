@@ -74,6 +74,15 @@ public class QueryAnalyzer
    /** EXPLAIN (ANALYZE, VERBOSE, BUFFERS ON) */
    private static final String EXPLAIN_ANALYZE_VERBOSE_BUFFERS = "EXPLAIN (ANALYZE, VERBOSE, BUFFERS ON)";
 
+   /** HOT column */
+   private static final String COLOR_HOT = "#00ff00";
+
+   /** Index column */
+   private static final String COLOR_INDEX = "#ff0000";
+
+   /** Standard column */
+   private static final String COLOR_STD = "#000000";
+
    /** The configuration */
    private static Properties configuration;
 
@@ -638,63 +647,76 @@ public class QueryAnalyzer
       l.add("<h1>HOT information</h1>");
       l.add("");
 
-      //  Table       Column  Indexes
-      Map<String, Map<String, List<String>>> m = new TreeMap<>();
-
-      for (Map.Entry<String, Set<String>> sEntry : set.entrySet())
+      for (Map.Entry<String, Map<String, Integer>> table : tables.entrySet())
       {
-         Map<String, List<String>> tIndexes = indexes.get(sEntry.getKey());
-         if (tIndexes != null && !tIndexes.isEmpty())
+         l.add("<h2>" + table.getKey() + "</h2>");
+
+         Set<String> setColumns = set.get(table.getKey());
+         if (setColumns == null)
+            setColumns = new TreeSet<>();
+         Set<String> indexColumns = new TreeSet<>();
+
+         Map<String, List<String>> idxs = indexes.get(table.getKey());
+         if (idxs != null)
          {
-            for (Map.Entry<String, List<String>> idxEntry : tIndexes.entrySet())
+            for (List<String> cs : idxs.values())
             {
-               for (String col : sEntry.getValue())
-               {
-                  if (idxEntry.getValue().contains(col))
-                  {
-                     Map<String, List<String>> d = m.get(sEntry.getKey());
-                     if (d == null)
-                        d = new TreeMap<>();
-
-                     List<String> idxs = d.get(col);
-                     if (idxs == null)
-                        idxs = new ArrayList<>();
-
-                     idxs.add(idxEntry.getKey());
-                     d.put(col, idxs);
-                     m.put(sEntry.getKey(), d);
-                  }
-               }
+               indexColumns.addAll(cs);
             }
          }
-      }
-
-      for (Map.Entry<String, Map<String, List<String>>> entry : m.entrySet())
-      {
-         l.add("<h2>" + entry.getKey() + "</h2>");
+         
          l.add("<table>");
          l.add("<tr>");
-         l.add("<td><b>Column</b></td>");
-         l.add("<td><b>Index(es)</b></td>");
+         l.add("<td><b>Columns</b></td>");
          l.add("</tr>");
 
-         for (Map.Entry<String, List<String>> te : entry.getValue().entrySet())
+         for (String column : table.getValue().keySet())
          {
-            l.add("<tr>");
-            l.add("<td>" + te.getKey() + "</td>");
-
-            StringBuilder sb = new StringBuilder();
-            Iterator<String> it = te.getValue().iterator();
-            while (it.hasNext())
+            String color = COLOR_STD;
+            if (indexColumns.contains(column) && setColumns.contains(column))
             {
-               sb = sb.append(it.next());
-               if (it.hasNext())
-                  sb = sb.append(", ");
+               color = COLOR_INDEX;
             }
-            l.add("<td>" + sb.toString() + "</td>");
+            else if (setColumns.contains(column))
+            {
+               color = COLOR_HOT;
+            }
+            
+            l.add("<tr>");
+            l.add("<td style=\"color : " + color + "\">" + column + "</td>");
             l.add("</tr>");
          }
          l.add("</table>");
+
+         if (idxs != null)
+         {
+            l.add("<p>");
+            
+            l.add("<table>");
+            l.add("<tr>");
+            l.add("<td><b>Index</b></td>");
+            l.add("<td><b>Columns</b></td>");
+            l.add("</tr>");
+            for (Map.Entry<String, List<String>> idx : idxs.entrySet())
+            {
+               l.add("<tr>");
+               l.add("<td>" + idx.getKey() + "</td>");
+
+               StringBuilder sb = new StringBuilder();
+               for (int i = 0; i < idx.getValue().size(); i++)
+               {
+                  sb = sb.append(idx.getValue().get(i));
+                  if (i < idx.getValue().size() - 1)
+                     sb = sb.append(", ");
+               }
+               l.add("<td>" + sb.toString() + "</td>");
+               
+               l.add("</tr>");
+
+            }
+
+            l.add("</table>");
+         }
       }
 
       l.add("<p>");

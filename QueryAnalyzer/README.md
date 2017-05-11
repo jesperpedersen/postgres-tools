@@ -104,7 +104,7 @@ Overview reports
 
 * Tables - layout, primary key, existing indexes and suggestions for primary key and indexes
 * Times - CSV file with planning and execution times
-* HOT - Shows columns that are updated which has an index associated
+* HOT - Shows column status: Black = Not updated, Green = Updated but not part of an index, Red = Updated and part of an index
 
 Each query report shows
 
