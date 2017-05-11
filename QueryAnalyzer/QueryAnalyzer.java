@@ -1992,6 +1992,10 @@ public class QueryAnalyzer
          
          c = DriverManager.getConnection(url, user, password);
 
+         Statement stmt = c.createStatement();
+         stmt.execute("ANALYZE");
+         stmt.close();
+
          SortedSet<String> queries = processQueries(c);
          writeIndex(queries);
          writeTables();
