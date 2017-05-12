@@ -1271,17 +1271,20 @@ public class LogAnalyzer
             }
          }
 
-         if (statement.startsWith("PREPARE TRANSACTION"))
+         if (statement != null)
          {
-            statement = "PREPARE TRANSACTION";
-         }
-         else if (statement.startsWith("COMMIT PREPARED"))
-         {
-            statement = "COMMIT PREPARED";
-         }
-         else if (statement.startsWith("ROLLBACK PREPARED"))
-         {
-            statement = "ROLLBACK PREPARED";
+            if (statement.startsWith("PREPARE TRANSACTION"))
+            {
+               statement = "PREPARE TRANSACTION";
+            }
+            else if (statement.startsWith("COMMIT PREPARED"))
+            {
+               statement = "COMMIT PREPARED";
+            }
+            else if (statement.startsWith("ROLLBACK PREPARED"))
+            {
+               statement = "ROLLBACK PREPARED";
+            }
          }
       }
 
