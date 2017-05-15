@@ -165,7 +165,8 @@ public class LogAnalyzer
       l.add("<head>");
       l.add("  <title>Log Analysis</title>");
       l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
       l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
       l.add("</head>");
       l.add("<body>");
@@ -708,7 +709,8 @@ public class LogAnalyzer
          l.add("<head>");
          l.add("  <title>Log Analysis</title>");
          l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
-         l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
+         l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+         l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
          l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
          l.add("</head>");
          l.add("<body>");
@@ -886,7 +888,8 @@ public class LogAnalyzer
       l.add("<head>");
       l.add("  <title>Log Analysis: " + sql + "</title>");
       l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
       l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
       l.add("</head>");
       l.add("<body>");
@@ -1180,7 +1183,8 @@ public class LogAnalyzer
       File report = new File("report");
       report.mkdir();
 
-      Files.copy(Paths.get("dygraph-combined.js"), Paths.get("report", "dygraph-combined.js"), StandardCopyOption.REPLACE_EXISTING);
+      Files.copy(Paths.get("dygraph.min.js"), Paths.get("report", "dygraph.min.js"), StandardCopyOption.REPLACE_EXISTING);
+      Files.copy(Paths.get("dygraph.min.css"), Paths.get("report", "dygraph.min.css"), StandardCopyOption.REPLACE_EXISTING);
    }
 
    /**
