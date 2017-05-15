@@ -18,8 +18,8 @@ This tool replays SQL through JDBC against PostgreSQL.
 
 ```bash
 cd /path/to/work_area
-wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlparser/0.9.6/jsqlparser-0.9.6.jar
-/path/to/javac -classpath jsqlparser-0.9.6.jar Replay.java
+wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlparser/1.0/jsqlparser-1.0.jar
+/path/to/javac -classpath jsqlparser-1.0.jar Replay.java
 ```
 
 ### Download the PostgreSQL JDBC driver
@@ -50,7 +50,7 @@ and do a run of the SQL statement that you want to replay.
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:jsqlparser-0.9.6.jar:postgresql-9.4.1211.jar Replay -i postgresql.log
+/path/to/java -classpath .:jsqlparser-1.0.jar:postgresql-42.1.1.jar Replay -i postgresql.log
 ```
 
 The name of the profile is basename of the log file, e.g. ```postgresql``` in the above example.
@@ -94,7 +94,7 @@ Required option.
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:jsqlparser-0.9.6.jar:postgresql-9.4.1211.jar Replay postgresql
+/path/to/java -classpath .:jsqlparser-1.0.jar:postgresql-42.1.1.jar Replay postgresql
 ```
 
 Options:
