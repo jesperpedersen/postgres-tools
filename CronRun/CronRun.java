@@ -455,7 +455,8 @@ public class CronRun
       l.add("<html>");
       l.add(" <head>");
       l.add("  <title>PostgreSQL Performance - " + date + "</title>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
       l.add(" </head>");
       l.add(" <body>");
       l.add("  <h1>Date: " + date + "</h1>");
@@ -545,7 +546,7 @@ public class CronRun
       l.add("                            {");
       l.add("                              legend: 'always',");
       l.add("                              title: 'Off / Logged',");
-      l.add("                              interactionModel: Dygraph.Interaction.nonInteractiveModel_,");
+      l.add("                              interactionModel: {},");
       l.add("                              ylabel: 'TPS',");
       l.add("                            }");
       l.add("   );");
@@ -554,7 +555,7 @@ public class CronRun
       l.add("                            {");
       l.add("                              legend: 'always',");
       l.add("                              title: 'Off / Unlogged',");
-      l.add("                              interactionModel: Dygraph.Interaction.nonInteractiveModel_,");
+      l.add("                              interactionModel: {},");
       l.add("                              ylabel: 'TPS',");
       l.add("                            }");
       l.add("   );");
@@ -563,7 +564,7 @@ public class CronRun
       l.add("                            {");
       l.add("                              legend: 'always',");
       l.add("                              title: 'On / Logged',");
-      l.add("                              interactionModel: Dygraph.Interaction.nonInteractiveModel_,");
+      l.add("                              interactionModel: {},");
       l.add("                              ylabel: 'TPS',");
       l.add("                            }");
       l.add("   );");
@@ -572,7 +573,7 @@ public class CronRun
       l.add("                            {");
       l.add("                              legend: 'always',");
       l.add("                              title: 'On / Unlogged',");
-      l.add("                              interactionModel: Dygraph.Interaction.nonInteractiveModel_,");
+      l.add("                              interactionModel: {},");
       l.add("                              ylabel: 'TPS',");
       l.add("                            }");
       l.add("   );");
@@ -593,7 +594,8 @@ public class CronRun
       l.add("<html>");
       l.add(" <head>");
       l.add("  <title>PostgreSQL Performance - Daily Reports</title>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
       l.add(" </head>");
       l.add(" <body>");
       l.add("  <h1>Daily Reports</h1>");
@@ -657,7 +659,8 @@ public class CronRun
       l.add("<html>");
       l.add(" <head>");
       l.add("  <title>PostgreSQL Performance - Max Reports</title>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
       l.add(" </head>");
       l.add(" <body>");
       l.add("  <h1>Max Reports</h1>");
@@ -929,7 +932,8 @@ public class CronRun
       l.add("<html>");
       l.add("<head>");
       l.add("<title>PostgreSQL Performance - Max: " + name + "</title>");
-      l.add("<script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
+      l.add("<link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("<script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
       l.add("</head>");
       l.add("<body>");
       l.add("<h1>Max: " + name + "</h1>");
@@ -1053,7 +1057,8 @@ public class CronRun
       l.add("<html>");
       l.add(" <head>");
       l.add("  <title>PostgreSQL Performance - Profile Reports</title>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
       l.add(" </head>");
       l.add(" <body>");
       l.add("  <h1>Profile Reports</h1>");
@@ -1090,7 +1095,8 @@ public class CronRun
       l.add("<html>");
       l.add("<head>");
       l.add("<title>PostgreSQL Performance - Profile: " + name + "</title>");
-      l.add("<script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
+      l.add("<link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("<script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
       l.add("</head>");
       l.add("<body>");
       l.add("<h1>Profile: " + name + "</h1>");
@@ -1189,7 +1195,8 @@ public class CronRun
       l.add("<html>");
       l.add("<head>");
       l.add("  <title>PostgreSQL Performance</title>");
-      l.add("  <script type=\"text/javascript\" src=\"dygraph-combined.js\"></script>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
       l.add("</head>");
       l.add("<body>");
       l.add("<h1>PostgreSQL Performance</h1>");
@@ -1351,7 +1358,8 @@ public class CronRun
       File report = new File("report");
       report.mkdir();
          
-      Files.copy(Paths.get("dygraph-combined.js"), Paths.get("report", "dygraph-combined.js"), StandardCopyOption.REPLACE_EXISTING);
+      Files.copy(Paths.get("dygraph.min.js"), Paths.get("report", "dygraph.min.js"), StandardCopyOption.REPLACE_EXISTING);
+      Files.copy(Paths.get("dygraph.min.css"), Paths.get("report", "dygraph.min.css"), StandardCopyOption.REPLACE_EXISTING);
    }
 
    /**

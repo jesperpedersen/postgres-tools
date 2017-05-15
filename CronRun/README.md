@@ -52,7 +52,8 @@ crontab -e
 
 ```bash
 cd /path/to/work_area
-wget http://dygraphs.com/1.1.1/dygraph-combined.js
+wget http://dygraphs.com/2.0.0/dygraph.min.js
+wget http://dygraphs.com/2.0.0/dygraph.min.css
 ```
 
 ### Create machine specific files
