@@ -48,6 +48,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import net.sf.jsqlparser.expression.JdbcParameter;
+import net.sf.jsqlparser.expression.LongValue;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
@@ -1122,7 +1123,7 @@ public class QueryAnalyzer
             if (plainSelect.getLimit() != null)
             {
                Limit limit = new Limit();
-               limit.setRowCount(1L);
+               limit.setRowCount(new LongValue(1L));
                plainSelect.setLimit(limit);
 
                values.add(Integer.toString(1));

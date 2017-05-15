@@ -18,8 +18,8 @@ This tool generates HTML reports about queries run against PostgreSQL.
 
 ```bash
 cd /path/to/work_area
-wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlparser/0.9.6/jsqlparser-0.9.6.jar
-/path/to/javac -classpath jsqlparser-0.9.6.jar QueryAnalyzer.java
+wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlparser/1.0/jsqlparser-1.0.jar
+/path/to/javac -classpath jsqlparser-1.0.jar QueryAnalyzer.java
 ```
 
 ### Download the PostgreSQL JDBC driver
@@ -32,7 +32,7 @@ Download from the [PostgreSQL JDBC](https://jdbc.postgresql.org/download.html) w
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:postgresql-9.4.1212.jar:jsqlparser-0.9.6.jar QueryAnalyzer
+/path/to/java -classpath .:postgresql-42.1.1.jar:jsqlparser-1.0.jar QueryAnalyzer
 ```
 
 ## Configuration
