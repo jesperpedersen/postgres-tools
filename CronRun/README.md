@@ -81,13 +81,18 @@ The perf.sh scripts contains the following configuration options
 
 The list of client counts for the run
 
+### TCP
+
+Determines if the run should be done with Unix Domain Sockets (```0```) or
+with TCP/IP (```1```)
+
 ### HOST
 
-The name of the host
+The name of the host for ```TCP=1```
 
 ### PORT
 
-The port used
+The port used for ```TCP=1```
 
 ### SCALE
 
