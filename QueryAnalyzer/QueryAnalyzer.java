@@ -54,6 +54,7 @@ import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.delete.Delete;
+import net.sf.jsqlparser.statement.insert.Insert;
 import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.Limit;
 import net.sf.jsqlparser.statement.select.PlainSelect;
@@ -74,6 +75,9 @@ public class QueryAnalyzer
    
    /** EXPLAIN (ANALYZE, VERBOSE, BUFFERS ON) */
    private static final String EXPLAIN_ANALYZE_VERBOSE_BUFFERS = "EXPLAIN (ANALYZE, VERBOSE, BUFFERS ON)";
+
+   /** EXPLAIN (VERBOSE) */
+   private static final String EXPLAIN_VERBOSE = "EXPLAIN (VERBOSE)";
 
    /** HOT column */
    private static final String COLOR_HOT = "#00ff00";
@@ -132,6 +136,21 @@ public class QueryAnalyzer
    /** SET usage:     Table   Columns */
    private static Map<String, Set<String>> set = new TreeMap<>();
    
+   /** Insert usage:  Table       QueryId */
+   private static Map<String, Set<String>> inserts = new TreeMap<>();
+
+   /** Update usage:  Table       QueryId */
+   private static Map<String, Set<String>> updates = new TreeMap<>();
+
+   /** Delete usage:  Table       QueryId */
+   private static Map<String, Set<String>> deletes = new TreeMap<>();
+
+   /** Export usage:  Table       Name        Key     Value */
+   private static Map<String, Map<String, Map<String, String>>> exports = new TreeMap<>();
+
+   /** Import usage:  Table       Name        Key     Value */
+   private static Map<String, Map<String, Map<String, String>>> imports = new TreeMap<>();
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -212,8 +231,9 @@ public class QueryAnalyzer
 
    /**
     * Write tables.html
+    * @param c The connection
     */
-   private static void writeTables() throws Exception
+   private static void writeTables(Connection c) throws Exception
    {
       List<String> l = new ArrayList<>();
 
@@ -231,10 +251,13 @@ public class QueryAnalyzer
 
       for (String tableName : tables.keySet())
       {
-         l.add("<h2>" + tableName + "</h2>");
+         String size = getTableSize(c, tableName);
+         l.add("<h2>" + tableName.toUpperCase() + " (" + size + ")</h2>");
 
          Map<String, Integer> tableData = tables.get(tableName);
          List<String> pkInfo = primaryKeys.get(tableName);
+         Map<String, Map<String, String>> exp = exports.get(tableName.toLowerCase());
+         Map<String, Map<String, String>> imp = imports.get(tableName.toLowerCase());
 
          l.add("<table>");
          for (String columnName : tableData.keySet())
@@ -275,8 +298,10 @@ public class QueryAnalyzer
          }
          
          Map<String, List<String>> indexData = indexes.get(tableName);
+         String idxSize = getIndexSize(c, tableName);
+
          l.add("<p>");
-         l.add("<u><b>Indexes</b></u>");
+         l.add("<u><b>Indexes (" + idxSize + ")</b></u>");
          if (indexData.size() > 0)
          {
             l.add("<table>");
@@ -301,6 +326,44 @@ public class QueryAnalyzer
          {
             l.add("<p>");
             l.add("None");
+         }
+
+         if ((exp != null && exp.size() > 0) || (imp != null && imp.size() > 0))
+         {
+            l.add("<p>");
+            l.add("<u><b>Foreign key constraints</b></u>");
+            if (exp != null && exp.size() > 0)
+            {
+               l.add("<p>");
+               l.add("<b>Exports</b><br/>");
+               l.add("<table>");
+               for (Map.Entry<String, Map<String, String>> e : exp.entrySet())
+               {
+                  Map<String, String> v = e.getValue();
+                  l.add("<tr>");
+                  l.add("<td>" + e.getKey() + "</td>");
+                  l.add("<td>" + v.get("FKTABLE_NAME") + ":" + v.get("FKCOLUMN_NAME") + " -> " +
+                        v.get("PKTABLE_NAME") + ":" + v.get("PKCOLUMN_NAME") + "</td>");
+                  l.add("</tr>");
+               }
+               l.add("</table>");
+            }
+            if (imp != null && imp.size() > 0)
+            {
+               l.add("<p>");
+               l.add("<b>Imports</b><br/>");
+               l.add("<table>");
+               for (Map.Entry<String, Map<String, String>> e : imp.entrySet())
+               {
+                  Map<String, String> v = e.getValue();
+                  l.add("<tr>");
+                  l.add("<td>" + e.getKey() + "</td>");
+                  l.add("<td>" + v.get("FKTABLE_NAME") + ":" + v.get("FKCOLUMN_NAME") + " -> " +
+                        v.get("PKTABLE_NAME") + ":" + v.get("PKCOLUMN_NAME") + "</td>");
+                  l.add("</tr>");
+               }
+               l.add("</table>");
+            }
          }
 
          Map<String, Set<String>> tableOn = on.get(tableName);
@@ -342,7 +405,7 @@ public class QueryAnalyzer
             }
             try
             {
-               l.addAll(suggestionIndexes(tableOn, tableWhere, tableSet));
+               l.addAll(suggestionIndexes(tableName, tableOn, tableWhere, tableSet, imports.get(tableName)));
             }
             catch (Exception e)
             {
@@ -382,6 +445,33 @@ public class QueryAnalyzer
                l.add("<u><b>SET</b></u>");
                l.add("<pre>");
                l.add(set.get(tableName).toString());
+               l.add("</pre>");
+            }
+
+            if (inserts.get(tableName) != null)
+            {
+               l.add("<p>");
+               l.add("<u><b>INSERT</b></u>");
+               l.add("<pre>");
+               l.add(inserts.get(tableName).toString());
+               l.add("</pre>");
+            }
+
+            if (updates.get(tableName) != null)
+            {
+               l.add("<p>");
+               l.add("<u><b>UPDATE</b></u>");
+               l.add("<pre>");
+               l.add(updates.get(tableName).toString());
+               l.add("</pre>");
+            }
+
+            if (deletes.get(tableName) != null)
+            {
+               l.add("<p>");
+               l.add("<u><b>DELETE</b></u>");
+               l.add("<pre>");
+               l.add(deletes.get(tableName).toString());
                l.add("</pre>");
             }
          }
@@ -605,6 +695,28 @@ public class QueryAnalyzer
          }
       }
       
+      l.add("<h2>Foreign key constraints</h2>");
+      for (String tableName : usedTables)
+      {
+         Map<String, Map<String, String>> imp = imports.get(tableName);
+         if (imp != null && imp.size() > 0)
+         {
+            l.add("<h3>" + tableName + "</h3>");
+            l.add("<table>");
+
+            for (Map.Entry<String, Map<String, String>> e : imp.entrySet())
+            {
+               Map<String, String> v = e.getValue();
+               l.add("<tr>");
+               l.add("<td>" + e.getKey() + "</td>");
+               l.add("<td>" + v.get("FKTABLE_NAME") + ":" + v.get("FKCOLUMN_NAME") + " -> " +
+                     v.get("PKTABLE_NAME") + ":" + v.get("PKCOLUMN_NAME") + "</td>");
+               l.add("</tr>");
+            }
+            l.add("</table>");
+         }
+      }
+
       l.add("<p>");
       l.add("<a href=\"index.html\">Back</a>");
       
@@ -650,7 +762,7 @@ public class QueryAnalyzer
 
       for (Map.Entry<String, Map<String, Integer>> table : tables.entrySet())
       {
-         l.add("<h2>" + table.getKey() + "</h2>");
+         l.add("<h2>" + table.getKey().toUpperCase() + "</h2>");
 
          Set<String> setColumns = set.get(table.getKey());
          if (setColumns == null)
@@ -700,17 +812,29 @@ public class QueryAnalyzer
             l.add("</tr>");
             for (Map.Entry<String, List<String>> idx : idxs.entrySet())
             {
+               boolean hot = true;
+
                l.add("<tr>");
-               l.add("<td>" + idx.getKey() + "</td>");
 
                StringBuilder sb = new StringBuilder();
                for (int i = 0; i < idx.getValue().size(); i++)
                {
                   sb = sb.append(idx.getValue().get(i));
+                  if (setColumns.contains(idx.getValue().get(i)))
+                     hot = false;
                   if (i < idx.getValue().size() - 1)
                      sb = sb.append(", ");
                }
-               l.add("<td>" + sb.toString() + "</td>");
+               if (hot)
+               {
+                  l.add("<td>" + idx.getKey() + "</td>");
+                  l.add("<td>" + sb.toString() + "</td>");
+               }
+               else
+               {
+                  l.add("<td style=\"color : " + COLOR_INDEX + "\">" + idx.getKey() + "</td>");
+                  l.add("<td style=\"color : " + COLOR_INDEX + "\">" + sb.toString() + "</td>");
+               }
                
                l.add("</tr>");
 
@@ -756,12 +880,42 @@ public class QueryAnalyzer
             if (query.indexOf("?") != -1)
                query = rewriteQuery(c, key, query, types, values);
 
+            Set<String> usedTables = getUsedTables(c, origQuery);
+
             if (query != null)
             {
+               boolean eavb = true;
+               for (String table : usedTables)
+               {
+                  if (exports.containsKey(table.toLowerCase()))
+                     eavb = false;
+
+                  if (imports.containsKey(table.toLowerCase()))
+                     eavb = false;
+               }
+
                for (int i = 0; i < planCount; i++)
-                  executeStatement(c, EXPLAIN_ANALYZE_VERBOSE_BUFFERS + " " + query, false);
+               {
+                  if (eavb)
+                  {
+                     executeStatement(c, EXPLAIN_ANALYZE_VERBOSE_BUFFERS + " " + query, false);
+                  }
+                  else
+                  {
+                     executeStatement(c, EXPLAIN_VERBOSE + " " + query, false);
+                  }
+               }
                   
-               List<String> l = executeStatement(c, EXPLAIN_ANALYZE_VERBOSE_BUFFERS + " " + query);
+               List<String> l = null;
+               if (eavb)
+               {
+                  l = executeStatement(c, EXPLAIN_ANALYZE_VERBOSE_BUFFERS + " " + query);
+               }
+               else
+               {
+                  l = executeStatement(c, EXPLAIN_VERBOSE + " " + query);
+               }
+
                for (String s : l)
                {
                   plan += s;
@@ -780,8 +934,6 @@ public class QueryAnalyzer
                }
             }
 
-            Set<String> usedTables = getUsedTables(c, origQuery);
-            
             writeReport(key, origQuery, query, usedTables, plan, types, values);
          }
          catch (Exception e)
@@ -812,6 +964,7 @@ public class QueryAnalyzer
    {
       List<String> result = new ArrayList<>();
 
+      SortedSet<String> existingColumns = new TreeSet<>(pkInfo);
       SortedSet<String> pkColumns = new TreeSet<>();
 
       if (tableOn != null)
@@ -833,16 +986,20 @@ public class QueryAnalyzer
          
          for (String columnName : pkColumns)
          {
-            result.add("<tr>");
-            result.add("<td><b>" + columnName + "</b></td>");
-            result.add("<td><b>" + getTypeName(tableData.get(columnName)) + "</b></td>");
-            result.add("</tr>");
+            String typeName = tableData.get(columnName) != null ? getTypeName(tableData.get(columnName)) : null;
+            if (typeName != null)
+            {
+               result.add("<tr>");
+               result.add("<td><b>" + columnName + "</b></td>");
+               result.add("<td><b>" + typeName + "</b></td>");
+               result.add("</tr>");
+            }
          }
 
          result.add("</table>");
          result.add("<p>");
 
-         if (pkColumns.equals(pkInfo))
+         if (pkColumns.equals(existingColumns))
          {
             result.add("Current primary key equal: <b>Yes</b>");
          }
@@ -857,14 +1014,18 @@ public class QueryAnalyzer
    
    /**
     * Suggestion: Indexes
+    * @param tableName The table name
     * @param tableOn The columns accessed in ON per query
     * @param tableWhere The columns accessed in WHERE per query
     * @param tableSet The columns accessed in SET
+    * @param imp Foreign index columns
     * @return The report data
     */
-   private static List<String> suggestionIndexes(Map<String, Set<String>> tableOn,
+   private static List<String> suggestionIndexes(String tableName,
+                                                 Map<String, Set<String>> tableOn,
                                                  Map<String, List<String>> tableWhere,
-                                                 Set<String> tableSet)
+                                                 Set<String> tableSet,
+                                                 Map<String, Map<String, String>> imp)
    {
       List<String> result = new ArrayList<>();
       Set<List<String>> suggested = new HashSet<>();
@@ -883,7 +1044,8 @@ public class QueryAnalyzer
             if (ll == null)
                ll = new ArrayList<>();
 
-            ll.add(l);
+            if (!ll.contains(l))
+               ll.add(l);
             counts.put(c, ll);
          }
       }
@@ -902,9 +1064,28 @@ public class QueryAnalyzer
                if (ll == null)
                   ll = new ArrayList<>();
 
-               ll.add(l);
+               if (!ll.contains(l))
+                  ll.add(l);
                counts.put(c, ll);
             }
+         }
+      }
+
+      if (imp != null)
+      {
+         for (Map<String, String> me : imp.values())
+         {
+            List l = new ArrayList<>(1);
+            l.add(me.get("FKCOLUMN_NAME"));
+
+            Integer c = Integer.valueOf(1);
+            List<List<String>> ll = counts.get(c);
+            if (ll == null)
+               ll = new ArrayList<>();
+
+            if (!ll.contains(l))
+               ll.add(l);
+            counts.put(c, ll);
          }
       }
 
@@ -916,16 +1097,14 @@ public class QueryAnalyzer
          for (List<String> l : ll)
          {
             boolean include = true;
+            boolean hot = true;
 
             if (l.size() == 1)
             {
                String val = l.get(0);
 
-               for (List<String> s : suggested)
-               {
-                  if (val.equals(s.get(0)) || (tableSet != null && !tableSet.isEmpty() && tableSet.contains(val)))
-                     include = false;
-               }
+               if (tableSet != null && tableSet.contains(val))
+                  hot = false;
             }
 
             if (include && suggested.contains(l))
@@ -950,8 +1129,24 @@ public class QueryAnalyzer
 
                if (newIndex.size() > 0)
                {
+                  StringBuilder indexName = new StringBuilder();
+                  if (!hot)
+                     indexName.append("<div style=\"color : " + COLOR_INDEX + "\">");
+                  indexName.append("idx_");
+                  indexName.append(tableName);
+                  indexName.append('_');
+                  for (int i = 0; i < newIndex.size(); i++)
+                  {
+                     indexName.append(newIndex.get(i));
+                     if (i < newIndex.size() - 1)
+                        indexName.append('_');
+                  }
+                  if (!hot)
+                     indexName.append("</div>");
+
                   result.add("<tr>");
                   result.add("<td>IDX" + idx + "</td>");
+                  result.add("<td>" + indexName.toString() + "</td>");
                   result.add("<td>" + newIndex + "</td>");
                   result.add("</tr>");
                   suggested.add(newIndex);
@@ -1006,10 +1201,17 @@ public class QueryAnalyzer
 
                try
                {
-                  String data = getData(c, currentColumn);
+                  Object data = getData(c, currentColumn);
                   Integer type = getType(c, currentColumn, query);
 
-                  values.add(data);
+                  if (data == null)
+                  {
+                     data = getDefaultValue(type);
+                     if (needsQuotes(data))
+                        data = "'" + data + "'";
+                  }
+
+                  values.add(data.toString());
                   types.add(type);
 
                   this.getBuffer().append(data);
@@ -1029,7 +1231,7 @@ public class QueryAnalyzer
                currentTableName = table.getName();
                
                if (table.getAlias() != null && !table.getAlias().getName().equals(""))
-                  aliases.put(table.getAlias().getName(), table.getName());
+                  aliases.put(table.getAlias().getName().toLowerCase(), currentTableName.toLowerCase());
 
                this.getBuffer().append(table);
             }
@@ -1151,7 +1353,7 @@ public class QueryAnalyzer
                l = new ArrayList<>();
 
             for (String col : vals)
-               l.add(col.toLowerCase());
+               l.add(0, col.toLowerCase());
 
             m.put(queryId, l);
             where.put(tableName, m);
@@ -1166,6 +1368,12 @@ public class QueryAnalyzer
 
          for (Table table : update.getTables())
          {
+            Set<String> qids = updates.get(table.getName().toLowerCase());
+            if (qids == null)
+               qids = new TreeSet<>();
+            qids.add(queryId);
+            updates.put(table.getName().toLowerCase(), qids);
+
             initTableData(c, table.getName());
             currentTableName = table.getName();
          }
@@ -1189,16 +1397,16 @@ public class QueryAnalyzer
 
                if (isSET)
                {
-                  Set<String> s = set.get(currentTableName);
+                  Set<String> s = set.get(currentTableName.toLowerCase());
                   if (s == null)
                      s = new TreeSet<>();
 
                   s.add(column.getColumnName().toLowerCase());
-                  set.put(currentTableName, s);
+                  set.put(currentTableName.toLowerCase(), s);
                }
                else
                {
-                  Map<String, List<String>> m = where.get(currentTableName);
+                  Map<String, List<String>> m = where.get(currentTableName.toLowerCase());
                   if (m == null)
                      m = new TreeMap<>();
 
@@ -1206,9 +1414,9 @@ public class QueryAnalyzer
                   if (l == null)
                      l = new ArrayList<>();
 
-                  l.add(column.getColumnName().toLowerCase());
+                  l.add(0, column.getColumnName().toLowerCase());
                   m.put(queryId, l);
-                  where.put(currentTableName, m);
+                  where.put(currentTableName.toLowerCase(), m);
                }
 
                this.getBuffer().append(column);
@@ -1242,7 +1450,7 @@ public class QueryAnalyzer
                currentTableName = table.getName();
                
                if (table.getAlias() != null && !table.getAlias().getName().equals(""))
-                  aliases.put(table.getAlias().getName(), table.getName());
+                  aliases.put(table.getAlias().getName().toLowerCase(), currentTableName.toLowerCase());
 
                this.getBuffer().append(table);
             }
@@ -1271,7 +1479,13 @@ public class QueryAnalyzer
       {
          Delete delete = (Delete)s;
          sawIn = false;
-         
+
+         Set<String> qids = deletes.get(delete.getTable().getName().toLowerCase());
+         if (qids == null)
+            qids = new TreeSet<>();
+         qids.add(queryId);
+         deletes.put(delete.getTable().getName().toLowerCase(), qids);
+
          initTableData(c, delete.getTable().getName());
          currentTableName = delete.getTable().getName();
 
@@ -1294,7 +1508,7 @@ public class QueryAnalyzer
                if (l == null)
                   l = new ArrayList<>();
 
-               l.add(column.getColumnName().toLowerCase());
+               l.add(0, column.getColumnName().toLowerCase());
                m.put(queryId, l);
                where.put(currentTableName, m);
 
@@ -1347,7 +1561,7 @@ public class QueryAnalyzer
                   if (l == null)
                      l = new ArrayList<>();
 
-                  l.add(inExpressionColumn.toLowerCase());
+                  l.add(0, inExpressionColumn.toLowerCase());
                   m.put(queryId, l);
                   where.put(currentTableName, m);
                }
@@ -1373,6 +1587,16 @@ public class QueryAnalyzer
          if (!sawIn)
             return buffer.toString();
       }
+      else if (s instanceof Insert)
+      {
+         Insert insert = (Insert)s;
+
+         Set<String> qids = inserts.get(insert.getTable().getName().toLowerCase());
+         if (qids == null)
+            qids = new TreeSet<>();
+         qids.add(queryId);
+         inserts.put(insert.getTable().getName().toLowerCase(), qids);
+      }
 
       System.out.println("Unsupported query: " + s);
       return null;
@@ -1388,18 +1612,23 @@ public class QueryAnalyzer
    {
       String tableName = column.getTable().getName();
 
-      if (tableName != null && aliases.containsKey(tableName))
-         tableName = aliases.get(tableName);
+      if (tableName != null && aliases.containsKey(tableName.toLowerCase()))
+         tableName = aliases.get(tableName.toLowerCase());
 
       if (tableName == null)
          tableName = currentTableName;
+
+      tableName = tableName.toLowerCase();
       
       Map<String, Object> values = data.get(tableName);
 
       if (values == null)
          values = initTableData(c, tableName);
       
-      Object o = values.get(column.getColumnName().toUpperCase());
+      Object o = values.get(column.getColumnName().toLowerCase());
+
+      if (o == null)
+         return null;
 
       if (needsQuotes(o))
          return "'" + o.toString() + "'";
@@ -1424,6 +1653,8 @@ public class QueryAnalyzer
       if (tableName == null)
          tableName = currentTableName;
 
+      tableName = tableName.toLowerCase();
+
       Map<String, Integer> tableData = tables.get(tableName);
 
       if (tableData == null)
@@ -1445,6 +1676,8 @@ public class QueryAnalyzer
    {
       Map<String, Object> values = new TreeMap<>();
 
+      tableName = tableName.toLowerCase();
+
       Statement stmt = null;
       ResultSet rs = null;
       String query = "SELECT * FROM " + tableName + " LIMIT 1";
@@ -1462,9 +1695,13 @@ public class QueryAnalyzer
             {
                String columnName = rsmd.getColumnName(i);
                int columnType = rsmd.getColumnType(i);
+               Object o = getResultSetValue(rs, i, columnType);
 
-               columnName = columnName.toUpperCase();
-               values.put(columnName, getResultSetValue(rs, i, columnType));
+               columnName = columnName.toLowerCase();
+               if (o == null)
+                  o = getDefaultValue(columnType);
+
+               values.put(columnName, o);
             }
          }
 
@@ -1568,6 +1805,65 @@ public class QueryAnalyzer
       return null;
    }
    
+   /**
+    * Get a default value
+    * @param type The type
+    * @return The value
+    */
+   private static Object getDefaultValue(int type) throws Exception
+   {
+      switch (type)
+      {
+         case Types.BINARY:
+            return new byte[] {};
+         case Types.BIT:
+            return Boolean.FALSE;
+         case Types.BIGINT:
+            return Long.valueOf(0);
+         case Types.BOOLEAN:
+            return Boolean.FALSE;
+         case Types.CHAR:
+            return ' ';
+         case Types.DATE:
+            return new java.sql.Date(System.currentTimeMillis());
+         case Types.DECIMAL:
+            return new java.math.BigDecimal(0);
+         case Types.DOUBLE:
+            return Double.valueOf(0.0);
+         case Types.FLOAT:
+            return Double.valueOf(0.0);
+         case Types.INTEGER:
+            return Integer.valueOf(0);
+         case Types.LONGVARBINARY:
+            return new byte[] {};
+         case Types.LONGVARCHAR:
+            return "";
+         case Types.NUMERIC:
+            return new java.math.BigDecimal(0);
+         case Types.REAL:
+            return Float.valueOf(0.0f);
+         case Types.SMALLINT:
+            return Short.valueOf((short)0);
+         case Types.TIME:
+         case Types.TIME_WITH_TIMEZONE:
+            return new java.sql.Time(System.currentTimeMillis());
+         case Types.TIMESTAMP:
+         case Types.TIMESTAMP_WITH_TIMEZONE:
+            return new java.sql.Timestamp(System.currentTimeMillis());
+         case Types.TINYINT:
+            return Short.valueOf((short)0);
+         case Types.VARBINARY:
+            return new byte[] {};
+         case Types.VARCHAR:
+            return "";
+         default:
+            System.out.println("Unsupported value: " + type);
+            break;
+      }
+
+      return null;
+   }
+
    /**
     * Needs quotes
     * @param o The object
@@ -1761,7 +2057,10 @@ public class QueryAnalyzer
       Set<String> result = new HashSet<>();
 
       net.sf.jsqlparser.statement.Statement s = CCJSqlParserUtil.parse(query);
-      result.addAll(new TablesNamesFinder().getTableList(s));
+      List<String> tableNames = new TablesNamesFinder().getTableList(s);
+
+      for (String t : tableNames)
+         result.add(t.toLowerCase());
       
       for (String tableName : result)
       {
@@ -1773,7 +2072,7 @@ public class QueryAnalyzer
             {
                DatabaseMetaData dmd = c.getMetaData();
 
-               rs = dmd.getColumns(null, null, tableName.toLowerCase(), "");
+               rs = dmd.getColumns(null, null, tableName, "");
                while (rs.next())
                {
                   String columnName = rs.getString("COLUMN_NAME");
@@ -1806,7 +2105,7 @@ public class QueryAnalyzer
                DatabaseMetaData dmd = c.getMetaData();
                Map<String, List<String>> indexInfo = new TreeMap<>();
 
-               rs = dmd.getIndexInfo(null, null, tableName.toLowerCase(), false, false);
+               rs = dmd.getIndexInfo(null, null, tableName, false, false);
                while (rs.next())
                {
                   String indexName = rs.getString("INDEX_NAME");
@@ -1847,7 +2146,7 @@ public class QueryAnalyzer
                DatabaseMetaData dmd = c.getMetaData();
                List<String> pkInfo = new ArrayList<>();
 
-               rs = dmd.getPrimaryKeys(null, null, tableName.toLowerCase());
+               rs = dmd.getPrimaryKeys(null, null, tableName);
                while (rs.next())
                {
                   String columnName = rs.getString("COLUMN_NAME");
@@ -1873,12 +2172,123 @@ public class QueryAnalyzer
                   }
                }
             }
+
+            rs = null;
+            try
+            {
+               DatabaseMetaData dmd = c.getMetaData();
+
+               rs = dmd.getExportedKeys(null, null, tableName);
+               while (rs.next())
+               {
+                  Map<String, Map<String, String>> m = exports.get(tableName);
+                  if (m == null)
+                     m = new TreeMap<>();
+
+                  TreeMap<String, String> v = new TreeMap<>();
+                  v.put("FKTABLE_NAME", rs.getString("FKTABLE_NAME").toLowerCase());
+                  v.put("FKCOLUMN_NAME", rs.getString("FKCOLUMN_NAME").toLowerCase());
+                  v.put("PKTABLE_NAME", rs.getString("PKTABLE_NAME").toLowerCase());
+                  v.put("PKCOLUMN_NAME", rs.getString("PKCOLUMN_NAME").toLowerCase());
+
+                  m.put(rs.getString("FK_NAME").toLowerCase(), v);
+                  exports.put(tableName, m);
+               }
+            }
+            finally
+            {
+               if (rs != null)
+               {
+                  try
+                  {
+                     rs.close();
+                  }
+                  catch (Exception e)
+                  {
+                     // Ignore
+                  }
+               }
+            }
+
+            rs = null;
+            try
+            {
+               DatabaseMetaData dmd = c.getMetaData();
+
+               rs = dmd.getImportedKeys(null, null, tableName);
+               while (rs.next())
+               {
+                  Map<String, Map<String, String>> m = imports.get(tableName);
+                  if (m == null)
+                     m = new TreeMap<>();
+
+                  TreeMap<String, String> v = new TreeMap<>();
+                  v.put("FKTABLE_NAME", rs.getString("FKTABLE_NAME").toLowerCase());
+                  v.put("FKCOLUMN_NAME", rs.getString("FKCOLUMN_NAME").toLowerCase());
+                  v.put("PKTABLE_NAME", rs.getString("PKTABLE_NAME").toLowerCase());
+                  v.put("PKCOLUMN_NAME", rs.getString("PKCOLUMN_NAME").toLowerCase());
+
+                  m.put(rs.getString("FK_NAME").toLowerCase(), v);
+                  imports.put(tableName, m);
+               }
+
+            }
+            finally
+            {
+               if (rs != null)
+               {
+                  try
+                  {
+                     rs.close();
+                  }
+                  catch (Exception e)
+                  {
+                     // Ignore
+                  }
+               }
+            }
          }
       }
       
       return result;
    }
    
+   /**
+    * Get the size of a table
+    * @param c The connection
+    * @param name The name
+    * @return The size
+    */
+   private static String getTableSize(Connection c, String name) throws Exception
+   {
+      Statement stmt = c.createStatement();
+      stmt.execute("SELECT pg_size_pretty(pg_table_size(\'" + name + "\'))");
+      ResultSet rs = stmt.getResultSet();
+      rs.next();
+      String result = rs.getString(1);
+      rs.close();
+      stmt.close();
+      return result;
+   }
+
+   /**
+    * Get the size of an index
+    * @param c The connection
+    * @param name The name
+    * @return The size
+    */
+   private static String getIndexSize(Connection c, String name) throws Exception
+   {
+      Statement stmt = c.createStatement();
+      stmt.execute("SELECT pg_size_pretty(pg_indexes_size(\'" + name + "\'))");
+      ResultSet rs = stmt.getResultSet();
+      rs.next();
+      String result = rs.getString(1);
+      rs.close();
+      stmt.close();
+      return result;
+   }
+
    /**
     * Read the configuration (queryanalyzer.properties)
     * @param config The configuration
@@ -1999,7 +2409,7 @@ public class QueryAnalyzer
 
          SortedSet<String> queries = processQueries(c);
          writeIndex(queries);
-         writeTables();
+         writeTables(c);
          writeCSV();
          writeHOT();
       }
