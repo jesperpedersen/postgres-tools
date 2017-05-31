@@ -620,19 +620,39 @@ public class Replay
 
       if (parallelExecution)
       {
-         es = Executors.newFixedThreadPool(clients.size());
-
-         for (Client cli : clients)
+         String mc = configuration.getProperty("max_connections");
+         if (mc == null)
          {
-            es.submit(cli);
+            es = Executors.newFixedThreadPool(clients.size());
+
+            for (Client cli : clients)
+            {
+               es.submit(cli);
+            }
+
+            clientReady.await();
+
+            start = System.currentTimeMillis();
+            clientRun.countDown();
+            clientDone.await();
+            end = System.currentTimeMillis();
          }
+         else
+         {
+            es = Executors.newFixedThreadPool(Integer.valueOf(mc));
 
-         clientReady.await();
+            for (Client cli : clients)
+            {
+               es.submit(cli);
+            }
 
-         start = System.currentTimeMillis();
-         clientRun.countDown();
-         clientDone.await();
-         end = System.currentTimeMillis();
+            Thread.sleep(2000L);
+
+            start = System.currentTimeMillis();
+            clientRun.countDown();
+            clientDone.await();
+            end = System.currentTimeMillis();
+         }
       }
       else
       {
@@ -936,6 +956,10 @@ public class Replay
          this.clientRun = clientRun;
          this.clientDone = clientDone;
          this.success = false;
+         this.beforeConnection = 0;
+         this.afterConnection = 0;
+         this.beforeRun = 0;
+         this.afterRun = 0;
       }
 
       /**
@@ -1189,6 +1213,9 @@ public class Replay
          }
          catch (Exception e)
          {
+            beforeRun = 0;
+            afterRun = 0;
+
             System.out.println("Exception from client " + identifier);
             System.out.println(de);
             e.printStackTrace();

@@ -90,6 +90,10 @@ The password of the user.
 
 Required option.
 
+#### max_connections
+
+The maximum number of connections used.
+
 ### Run
 
 ```bash
