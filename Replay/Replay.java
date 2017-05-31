@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2016 Jesper Pedersen <jesper.pedersen@comcast.net>
+ * Copyright (c) 2017 Jesper Pedersen <jesper.pedersen@comcast.net>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -62,6 +62,8 @@ import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.insert.Insert;
+import net.sf.jsqlparser.statement.select.Limit;
+import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.update.Update;
 import net.sf.jsqlparser.util.deparser.ExpressionDeParser;
@@ -227,6 +229,8 @@ public class Replay
                   LogEntry next = lle.get(i + 1);
                   if (next.isParameters())
                   {
+                     de.setPrepared(true);
+
                      List<String> parameters = new ArrayList<>();
                      StringTokenizer st = new StringTokenizer(next.getStatement(), "?");
                      List<Integer> types = getParameterTypes(c, le.getStatement(), st.countTokens());
@@ -239,7 +243,14 @@ public class Replay
                         String value = null;
                         if (start != -1 && end != -1)
                         {
-                           value = token.substring(start + 1, end);
+                           if (start + 1 == end)
+                           {
+                              value = "";
+                           }
+                           else
+                           {
+                              value = token.substring(start + 1, end);
+                           }
                         }
                         parameters.add(value);
                      }
@@ -270,220 +281,242 @@ public class Replay
    {
       List<Integer> result = new ArrayList<>();
 
-      net.sf.jsqlparser.statement.Statement s = CCJSqlParserUtil.parse(query);
-
-      if (s instanceof Select)
+      try
       {
-         Select select = (Select)s;
-         
-         StringBuilder buffer = new StringBuilder();
-         ExpressionDeParser expressionDeParser = new ExpressionDeParser()
+         net.sf.jsqlparser.statement.Statement s = CCJSqlParserUtil.parse(query);
+
+         if (s instanceof Select)
          {
-            private Column currentColumn = null;
-            
-            @Override
-            public void visit(Column column)
-            {
-               currentColumn = column;
-            }
+            Select select = (Select)s;
 
-            @Override
-            public void visit(JdbcParameter jdbcParameter)
+            StringBuilder buffer = new StringBuilder();
+            ExpressionDeParser expressionDeParser = new ExpressionDeParser()
             {
-               String table = currentColumn.getTable().getName();
-               String column = currentColumn.getColumnName();
+               private Column currentColumn = null;
 
-               if (table == null)
-                  table = currentTableName;
-               
-               if (aliases.containsKey(table))
-                  table = aliases.get(table);
-               
-               try
+               @Override
+               public void visit(Column column)
                {
-                  result.add(getType(c, table, column));
+                  currentColumn = column;
                }
-               catch (Exception e)
+
+               @Override
+               public void visit(JdbcParameter jdbcParameter)
                {
-                  e.printStackTrace();
+                  String table = currentColumn.getTable().getName();
+                  String column = currentColumn.getColumnName();
+
+                  if (table == null)
+                     table = currentTableName;
+
+                  if (aliases.containsKey(table))
+                     table = aliases.get(table);
+
+                  try
+                  {
+                     result.add(getType(c, table, column));
+                  }
+                  catch (Exception e)
+                  {
+                     e.printStackTrace();
+                  }
                }
-            }
-         };
+            };
 
-         SelectDeParser deparser = new SelectDeParser(expressionDeParser, buffer)
-         {
-            @Override
-            public void visit(Table table)
+            SelectDeParser deparser = new SelectDeParser(expressionDeParser, buffer)
             {
-               currentTableName = table.getName();
-               
-               if (table.getAlias() != null && !table.getAlias().getName().equals(""))
-                  aliases.put(table.getAlias().getName(), table.getName());
-            }
-         };
-         expressionDeParser.setSelectVisitor(deparser);
-         expressionDeParser.setBuffer(buffer);
-
-         select.getSelectBody().accept(deparser);
-      }
-      else if (s instanceof Update)
-      {
-         Update update = (Update)s;
-
-         for (Table table : update.getTables())
-         {
-            currentTableName = table.getName();
-         }
-
-         StringBuilder buffer = new StringBuilder();
-         ExpressionDeParser expressionDeParser = new ExpressionDeParser()
-         {
-            private Column currentColumn = null;
-            
-            @Override
-            public void visit(Column column)
-            {
-               currentColumn = column;
-            }
-
-            @Override
-            public void visit(JdbcParameter jdbcParameter)
-            {
-               String table = currentColumn.getTable().getName();
-               String column = currentColumn.getColumnName();
-
-               if (table == null)
-                  table = currentTableName;
-               
-               if (aliases.containsKey(table))
-                  table = aliases.get(table);
-               
-               try
+               @Override
+               public void visit(Table table)
                {
-                  result.add(getType(c, table, column));
+                  currentTableName = table.getName();
+
+                  if (table.getAlias() != null && !table.getAlias().getName().equals(""))
+                     aliases.put(table.getAlias().getName(), table.getName());
                }
-               catch (Exception e)
+            };
+            expressionDeParser.setSelectVisitor(deparser);
+            expressionDeParser.setBuffer(buffer);
+
+            select.getSelectBody().accept(deparser);
+
+            if (select.getSelectBody() instanceof PlainSelect)
+            {
+               PlainSelect plainSelect = (PlainSelect)select.getSelectBody();
+               if (plainSelect.getLimit() != null)
                {
-                  e.printStackTrace();
+                  result.add(Integer.valueOf(Types.INTEGER));
                }
-            }
-         };
-
-         SelectDeParser selectDeParser = new SelectDeParser(expressionDeParser, buffer)
-         {
-            @Override
-            public void visit(Table table)
-            {
-               currentTableName = table.getName();
-               
-               if (table.getAlias() != null && !table.getAlias().getName().equals(""))
-                  aliases.put(table.getAlias().getName(), table.getName());
-            }
-         };
-         expressionDeParser.setSelectVisitor(selectDeParser);
-         expressionDeParser.setBuffer(buffer);
-
-         net.sf.jsqlparser.util.deparser.UpdateDeParser updateDeParser =
-            new net.sf.jsqlparser.util.deparser.UpdateDeParser(expressionDeParser, selectDeParser, buffer);
-
-         net.sf.jsqlparser.util.deparser.StatementDeParser statementDeParser =
-            new net.sf.jsqlparser.util.deparser.StatementDeParser(buffer)
-         {
-            @Override
-            public void visit(Update update)
-            {
-               updateDeParser.deParse(update);
-            }
-         };
-         
-         update.accept(statementDeParser);
-      }
-      else if (s instanceof Delete)
-      {
-         Delete delete = (Delete)s;
-         currentTableName = delete.getTable().getName();
-
-         StringBuilder buffer = new StringBuilder();
-         ExpressionDeParser expressionDeParser = new ExpressionDeParser()
-         {
-            private Column currentColumn = null;
-            
-            @Override
-            public void visit(Column column)
-            {
-               currentColumn = column;
-            }
-
-            @Override
-            public void visit(JdbcParameter jdbcParameter)
-            {
-               String table = currentColumn.getTable().getName();
-               String column = currentColumn.getColumnName();
-
-               if (table == null)
-                  table = currentTableName;
-               
-               if (aliases.containsKey(table))
-                  table = aliases.get(table);
-               
-               try
-               {
-                  result.add(getType(c, table, column));
-               }
-               catch (Exception e)
-               {
-                  e.printStackTrace();
-               }
-            }
-         };
-         expressionDeParser.setBuffer(buffer);
-
-         net.sf.jsqlparser.util.deparser.DeleteDeParser deleteDeParser =
-            new net.sf.jsqlparser.util.deparser.DeleteDeParser(expressionDeParser, buffer);
-
-         net.sf.jsqlparser.util.deparser.StatementDeParser statementDeParser =
-            new net.sf.jsqlparser.util.deparser.StatementDeParser(buffer)
-         {
-            @Override
-            public void visit(Delete delete)
-            {
-               deleteDeParser.deParse(delete);
-            }
-         };
-         
-         delete.accept(statementDeParser);
-      }
-      else if (s instanceof Insert)
-      {
-         Insert insert = (Insert)s;
-         currentTableName = insert.getTable().getName();
-
-         for (Column currentColumn : insert.getColumns())
-         {
-            String table = currentColumn.getTable().getName();
-            String column = currentColumn.getColumnName();
-
-            if (table == null)
-               table = currentTableName;
-               
-            if (aliases.containsKey(table))
-               table = aliases.get(table);
-               
-            try
-            {
-               result.add(getType(c, table, column));
-            }
-            catch (Exception e)
-            {
-               e.printStackTrace();
             }
          }
-      }
+         else if (s instanceof Update)
+         {
+            Update update = (Update)s;
 
-      if (result.size() != num)
-         System.out.println("Incomplete data for query: " + query);
-      
-      return result;
+            for (Table table : update.getTables())
+            {
+               currentTableName = table.getName();
+            }
+
+            StringBuilder buffer = new StringBuilder();
+            ExpressionDeParser expressionDeParser = new ExpressionDeParser()
+            {
+               private Column currentColumn = null;
+
+               @Override
+               public void visit(Column column)
+               {
+                  currentColumn = column;
+               }
+
+               @Override
+               public void visit(JdbcParameter jdbcParameter)
+               {
+                  String table = currentColumn.getTable().getName();
+                  String column = currentColumn.getColumnName();
+
+                  if (table == null)
+                     table = currentTableName;
+               
+                  if (aliases.containsKey(table))
+                     table = aliases.get(table);
+               
+                  try
+                  {
+                     result.add(getType(c, table, column));
+                  }
+                  catch (Exception e)
+                  {
+                     e.printStackTrace();
+                  }
+               }
+            };
+
+            SelectDeParser selectDeParser = new SelectDeParser(expressionDeParser, buffer)
+            {
+               @Override
+               public void visit(Table table)
+               {
+                  currentTableName = table.getName();
+
+                  if (table.getAlias() != null && !table.getAlias().getName().equals(""))
+                     aliases.put(table.getAlias().getName(), table.getName());
+               }
+            };
+            expressionDeParser.setSelectVisitor(selectDeParser);
+            expressionDeParser.setBuffer(buffer);
+
+            net.sf.jsqlparser.util.deparser.UpdateDeParser updateDeParser =
+               new net.sf.jsqlparser.util.deparser.UpdateDeParser(expressionDeParser, selectDeParser, buffer);
+
+            net.sf.jsqlparser.util.deparser.StatementDeParser statementDeParser =
+               new net.sf.jsqlparser.util.deparser.StatementDeParser(buffer)
+            {
+               @Override
+               public void visit(Update update)
+               {
+                  updateDeParser.deParse(update);
+               }
+            };
+
+            update.accept(statementDeParser);
+         }
+         else if (s instanceof Delete)
+         {
+            Delete delete = (Delete)s;
+            currentTableName = delete.getTable().getName();
+
+            StringBuilder buffer = new StringBuilder();
+            ExpressionDeParser expressionDeParser = new ExpressionDeParser()
+            {
+               private Column currentColumn = null;
+
+               @Override
+               public void visit(Column column)
+               {
+                  currentColumn = column;
+               }
+
+               @Override
+               public void visit(JdbcParameter jdbcParameter)
+               {
+                  String table = currentColumn.getTable().getName();
+                  String column = currentColumn.getColumnName();
+
+                  if (table == null)
+                     table = currentTableName;
+               
+                  if (aliases.containsKey(table))
+                     table = aliases.get(table);
+
+                  try
+                  {
+                     result.add(getType(c, table, column));
+                  }
+                  catch (Exception e)
+                  {
+                     e.printStackTrace();
+                  }
+               }
+            };
+            expressionDeParser.setBuffer(buffer);
+
+            net.sf.jsqlparser.util.deparser.DeleteDeParser deleteDeParser =
+               new net.sf.jsqlparser.util.deparser.DeleteDeParser(expressionDeParser, buffer);
+
+            net.sf.jsqlparser.util.deparser.StatementDeParser statementDeParser =
+               new net.sf.jsqlparser.util.deparser.StatementDeParser(buffer)
+            {
+               @Override
+               public void visit(Delete delete)
+               {
+                  deleteDeParser.deParse(delete);
+               }
+            };
+         
+            delete.accept(statementDeParser);
+         }
+         else if (s instanceof Insert)
+         {
+            Insert insert = (Insert)s;
+            currentTableName = insert.getTable().getName();
+
+            for (Column currentColumn : insert.getColumns())
+            {
+               String table = currentColumn.getTable().getName();
+               String column = currentColumn.getColumnName();
+
+               if (table == null)
+                  table = currentTableName;
+               
+               if (aliases.containsKey(table))
+                  table = aliases.get(table);
+               
+               try
+               {
+                  result.add(getType(c, table, column));
+               }
+               catch (Exception e)
+               {
+                  e.printStackTrace();
+               }
+            }
+         }
+
+         if (result.size() != num)
+         {
+            System.out.println("Incomplete data for query: " + query);
+            System.out.println(result);
+            System.out.println(num);
+            System.out.println("-------");
+         }
+
+         return result;
+      }
+      catch (Exception e)
+      {
+         System.out.println("Exception with: " + query + " (" + num + ")");
+         throw e;
+      }
    }
 
    /**
@@ -1156,6 +1189,7 @@ public class Replay
          }
          catch (Exception e)
          {
+            System.out.println("Exception from client " + identifier);
             System.out.println(de);
             e.printStackTrace();
          }
@@ -1412,19 +1446,19 @@ public class Replay
          if (t != null && !"".equals(t))
          {
             types = new ArrayList<>();
-            StringTokenizer st = new StringTokenizer(t, "|");
-            while (st.hasMoreTokens())
+            String[] ss = t.split("\\|");
+            for (int i = 0; i < ss.length; i++)
             {
-               types.add(Integer.valueOf(st.nextToken()));
+               types.add(Integer.valueOf(ss[i]));
             }
          }
          if (pa != null && !"".equals(pa))
          {
             parameters = new ArrayList<>();
-            StringTokenizer st = new StringTokenizer(pa, "|");
-            while (st.hasMoreTokens())
+            String[] ss = pa.split("\\|");
+            for (int i = 0; i < ss.length; i++)
             {
-               parameters.add(st.nextToken());
+               parameters.add(ss[i]);
             }
          }
       }
