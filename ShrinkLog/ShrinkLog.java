@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2016 Jesper Pedersen <jesper.pedersen@comcast.net>
+ * Copyright (c) 2017 Jesper Pedersen <jesper.pedersen@comcast.net>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -54,11 +54,20 @@ public class ShrinkLog
    /** Max statements */
    private static int maxStatements;
 
+   /** Skip */
+   private static int skip;
+
    /** Statements:    Process  Number */
    private static Map<Integer, Integer> statements = new TreeMap<>();
    
    /** Transaction:   Process  Status */
    private static Map<Integer, Boolean> transactions = new TreeMap<>();
+
+   /** Skip:          Process  Number */
+   private static Map<Integer, Integer> skips = new TreeMap<>();
+
+   /** Parse          Process */
+   private static Set<Integer> parse = new TreeSet<>();
 
    /** Ended */
    private static Set<Integer> ended = new TreeSet<>();
@@ -135,89 +144,156 @@ public class ShrinkLog
             {
                statements.put(le.getProcessId(), Integer.valueOf(0));
                transactions.put(le.getProcessId(), Boolean.FALSE);
+               if (skip > 0)
+                  skips.put(le.getProcessId(), Integer.valueOf(skip));
             }
             
-            if (le.isParse())
+            Integer skp = skips.get(le.getProcessId());
+            if (skp != null)
             {
-               if (ended.contains(le.getProcessId()))
-               {
-                  if (!Boolean.TRUE.equals(transactions.get(le.getProcessId())))
-                     include = false;
-               }
+               include = false;
 
-               if (include)
+               if (le.isParse())
                {
-                  if (le.getStatement().startsWith("BEGIN"))
+                  parse.add(le.getProcessId());
+                  if (transactions.get(le.getProcessId()) == null)
                   {
-                     transactions.put(le.getProcessId(), Boolean.TRUE);
+                     skp = Integer.valueOf(skp.intValue() - 1);
+                     if (skp.intValue() < 0)
+                     {
+                        skp = null;
+                        include = true;
+                     }
+
+                     skips.put(le.getProcessId(), skp);
+
+                     if (le.getStatement().startsWith("BEGIN"))
+                     {
+                        transactions.put(le.getProcessId(), Boolean.TRUE);
+                     }
                   }
                }
-            }
-            else if (le.isBind())
-            {
-               if (ended.contains(le.getProcessId()))
+               else if (le.isBind())
                {
-                  if (!Boolean.TRUE.equals(transactions.get(le.getProcessId())))
-                     include = false;
-               }
-
-               if (include)
-               {
-                  if (le.getStatement().startsWith("BEGIN"))
+                  if (!parse.contains(le.getProcessId()))
                   {
-                     transactions.put(le.getProcessId(), Boolean.TRUE);
+                     if (transactions.get(le.getProcessId()) == null)
+                     {
+                        skp = Integer.valueOf(skp.intValue() - 1);
+                        if (skp.intValue() < 0)
+                        {
+                           skp = null;
+                           include = true;
+                        }
+
+                        skips.put(le.getProcessId(), skp);
+
+                        if (le.getStatement().startsWith("BEGIN"))
+                        {
+                           transactions.put(le.getProcessId(), Boolean.TRUE);
+                        }
+                     }
                   }
                }
-            }
-            else if (le.isExecute())
-            {
-               if (!ended.contains(le.getProcessId()) ||
-                   Boolean.TRUE.equals(transactions.get(le.getProcessId())))
+               else if (le.isExecute())
                {
-                  Integer count = statements.get(le.getProcessId());
-                  count = Integer.valueOf(count.intValue() + 1);
-                  statements.put(le.getProcessId(), count);
-
-                  if ((maxStatements != -1 && count.intValue() >= maxStatements) || ended.size() > 0)
-                  {
-                     ended.add(le.getProcessId());
-                  }
+                  parse.remove(le.getProcessId());
 
                   if (le.getStatement().startsWith("COMMIT"))
                   {
-                     transactions.put(le.getProcessId(), Boolean.FALSE);
-                     if (ended.contains(le.getProcessId()))
-                        parameters.add(le.getProcessId());
+                     transactions.put(le.getProcessId(), null);
                   }
-                  else if (le.getStatement().startsWith("ROLLBACK"))
+               }
+            }
+
+            if (include)
+            {
+               if (le.isParse())
+               {
+                  if (ended.contains(le.getProcessId()))
                   {
-                     transactions.put(le.getProcessId(), Boolean.FALSE);
-                     if (ended.contains(le.getProcessId()))
+                     if (!Boolean.TRUE.equals(transactions.get(le.getProcessId())))
+                        include = false;
+                  }
+
+                  if (include)
+                  {
+                     if (le.getStatement().startsWith("BEGIN"))
+                     {
+                        transactions.put(le.getProcessId(), Boolean.TRUE);
+                     }
+                  }
+               }
+               else if (le.isBind())
+               {
+                  if (ended.contains(le.getProcessId()))
+                  {
+                     if (!Boolean.TRUE.equals(transactions.get(le.getProcessId())))
+                        include = false;
+                  }
+
+                  if (include)
+                  {
+                     if (le.getStatement().startsWith("BEGIN"))
+                     {
+                        transactions.put(le.getProcessId(), Boolean.TRUE);
+                     }
+                  }
+               }
+               else if (le.isExecute())
+               {
+                  if (!ended.contains(le.getProcessId()) ||
+                      Boolean.TRUE.equals(transactions.get(le.getProcessId())))
+                  {
+                     Integer count = statements.get(le.getProcessId());
+                     count = Integer.valueOf(count.intValue() + 1);
+                     statements.put(le.getProcessId(), count);
+
+                     if ((maxStatements != -1 && count.intValue() >= maxStatements) || ended.size() > 0)
+                     {
+                        ended.add(le.getProcessId());
+                     }
+
+                     if (le.getStatement().startsWith("COMMIT"))
+                     {
+                        transactions.put(le.getProcessId(), Boolean.FALSE);
+                        if (ended.contains(le.getProcessId()))
+                           parameters.add(le.getProcessId());
+                     }
+                     else if (le.getStatement().startsWith("ROLLBACK"))
+                     {
+                        transactions.put(le.getProcessId(), Boolean.FALSE);
+                        if (ended.contains(le.getProcessId()))
+                           parameters.add(le.getProcessId());
+                     }
+                  }
+                  else
+                  {
+                     include = false;
+                  }
+               }
+               else if (le.isParameters())
+               {
+                  if (ended.contains(le.getProcessId()) && !Boolean.TRUE.equals(transactions.get(le.getProcessId())))
+                  {
+                     if (parameters.contains(le.getProcessId()))
+                     {
+                        include = false;
+                     }
+                     else
+                     {
                         parameters.add(le.getProcessId());
+                     }
                   }
                }
                else
                {
                   include = false;
                }
-            }
-            else if (le.isParameters())
-            {
-               if (ended.contains(le.getProcessId()) && !Boolean.TRUE.equals(transactions.get(le.getProcessId())))
-               {
-                  if (parameters.contains(le.getProcessId()))
-                  {
-                     include = false;
-                  }
-                  else
-                  {
-                     parameters.add(le.getProcessId());
-                  }
-               }
-            }
 
-            if (include)
-               appendFile(output, le.toString());
+               if (include)
+                  appendFile(output, le.toString());
+            }
          }
       }
       finally
@@ -231,7 +307,7 @@ public class ShrinkLog
    }
 
    /**
-    * Read the configuration (replay.properties)
+    * Read the configuration (shrinklog.properties)
     * @param config The configuration
     */
    private static void readConfiguration(String config) throws Exception
@@ -273,9 +349,9 @@ public class ShrinkLog
       BufferedWriter output = null;
       try
       {
-         if (args.length != 1 && args.length != 2)
+         if (args.length == 0 || args.length > 3)
          {
-            System.out.println("Usage: ShrinkLog <log_file> [<max_statements>]");
+            System.out.println("Usage: ShrinkLog <log_file> [<max_statements>] [skip]");
             return;
          }
 
@@ -284,6 +360,7 @@ public class ShrinkLog
 
          filename = args[0];
          maxStatements = args.length > 1 ? Integer.valueOf(args[1]) : -1;
+         skip = args.length > 2 ? Integer.valueOf(args[2]) : -1;
          output = openFile(Paths.get("output.log"));
 
          processLog(output);

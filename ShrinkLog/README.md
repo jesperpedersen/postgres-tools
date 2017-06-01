@@ -40,12 +40,15 @@ and do a run of the SQL statement that you are interested in.
 
 ```bash
 cd /path/to/work_area
-/path/to/java ShrinkLog <log_file> [max_statements]
+/path/to/java ShrinkLog <log_file> [max_statements] [skip]
 ```
 
 where ```<log_file>``` is the log file (```postgresql.log```), and ```[max_statements]```
 is an optional parameter that specifies how many SQL statements a single client
-should execute at maximum.
+should execute at maximum. The optional ```skip``` parameter specifies how many statements
+or transactions that should be skipped from the beginning of the interaction. If ```skip```
+is specified the ```max_statements``` parameter can be set to ```-1``` to keep all other
+statements.
 
 ## Result
 
