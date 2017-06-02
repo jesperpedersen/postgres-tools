@@ -304,19 +304,30 @@ public class QueryAnalyzer
          l.add("<u><b>Indexes (" + idxSize + ")</b></u>");
          if (indexData.size() > 0)
          {
+            Set<String> s = set.get(tableName);
             l.add("<table>");
-            for (String indexName : indexData.keySet())
+            for (Map.Entry<String, List<String>> idx : indexData.entrySet())
             {
                l.add("<tr>");
-               if (indexData.get(indexName).equals(pkInfo))
+               if (indexData.get(idx.getKey()).equals(pkInfo))
                {
-                  l.add("<td><b>" + indexName + "</b></td>");
-                  l.add("<td><b>" + indexData.get(indexName) + "</b></td>");
+                  l.add("<td><b>" + idx.getKey() + "</b></td>");
+                  l.add("<td><b>" + idx.getValue() + "</b></td>");
                }
                else
                {
-                  l.add("<td>" + indexName + "</td>");
-                  l.add("<td>" + indexData.get(indexName) + "</td>");
+                  String color = COLOR_STD;
+                  if (s != null)
+                  {
+                     for (String col : idx.getValue())
+                     {
+                        if (s.contains(col))
+                           color = COLOR_INDEX;
+                     }
+                  }
+
+                  l.add("<td style=\"color : " + color + "\">" + idx.getKey() + "</td>");
+                  l.add("<td>" + idx.getValue() + "</td>");
                }
                l.add("</tr>");
             }
