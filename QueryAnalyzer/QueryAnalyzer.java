@@ -100,9 +100,6 @@ public class QueryAnalyzer
    /** Current table name */
    private static String currentTableName = null;
 
-   /** Saw an IN expression */
-   private static boolean sawIn = false;
-
    /** IN expression column */
    private static String inExpressionColumn = null;
 
@@ -1179,7 +1176,6 @@ public class QueryAnalyzer
       {
          Select select = (Select)s;
          Map<String, Set<String>> extraIndexes = new TreeMap<>();
-         sawIn = false;
          
          StringBuilder buffer = new StringBuilder();
          ExpressionDeParser expressionDeParser = new ExpressionDeParser()
@@ -1196,9 +1192,6 @@ public class QueryAnalyzer
             @Override
             public void visit(JdbcParameter jdbcParameter)
             {
-               if (sawIn)
-                  return;
-
                try
                {
                   Object data = getData(c, currentColumn);
@@ -1273,7 +1266,6 @@ public class QueryAnalyzer
                @Override
                public void visit(InExpression inExpression)
                {
-                  sawIn = true;
                   inExpressionColumn = null;
 
                   ExpressionDeParser inExpressionDeParser = new ExpressionDeParser()
@@ -1359,8 +1351,7 @@ public class QueryAnalyzer
             where.put(tableName, m);
          }
 
-         if (!sawIn)
-            return buffer.toString();
+         return buffer.toString();
       }
       else if (s instanceof Update)
       {
@@ -1478,7 +1469,6 @@ public class QueryAnalyzer
       else if (s instanceof Delete)
       {
          Delete delete = (Delete)s;
-         sawIn = false;
 
          Set<String> qids = deletes.get(delete.getTable().getName().toLowerCase());
          if (qids == null)
@@ -1537,7 +1527,6 @@ public class QueryAnalyzer
             @Override
             public void visit(InExpression inExpression)
             {
-               sawIn = true;
                inExpressionColumn = null;
 
                ExpressionDeParser inExpressionDeParser = new ExpressionDeParser()
@@ -1584,8 +1573,7 @@ public class QueryAnalyzer
          
          delete.accept(statementDeParser);
 
-         if (!sawIn)
-            return buffer.toString();
+         return buffer.toString();
       }
       else if (s instanceof Insert)
       {
