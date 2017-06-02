@@ -133,6 +133,9 @@ public class QueryAnalyzer
    /** SET usage:     Table   Columns */
    private static Map<String, Set<String>> set = new TreeMap<>();
    
+   /** Select usage:  Table       QueryId */
+   private static Map<String, Set<String>> selects = new TreeMap<>();
+
    /** Insert usage:  Table       QueryId */
    private static Map<String, Set<String>> inserts = new TreeMap<>();
 
@@ -414,11 +417,20 @@ public class QueryAnalyzer
             }
          }
 
-         if (debug && (tableWhere != null || tableOn != null))
+         if (debug)
          {
             l.add("<h3>DEBUG</h3>");
 
-            if (tableOn != null)
+            if (selects.get(tableName) != null && selects.get(tableName).size() > 0)
+            {
+               l.add("<p>");
+               l.add("<u><b>SELECT</b></u>");
+               l.add("<pre>");
+               l.add(selects.get(tableName).toString());
+               l.add("</pre>");
+            }
+
+            if (tableOn != null && tableOn.size() > 0)
             {
                l.add("<p>");
                l.add("<u><b>ON</b></u>");
@@ -427,7 +439,7 @@ public class QueryAnalyzer
                l.add("</pre>");
             }
 
-            if (tableWhere != null)
+            if (tableWhere != null && tableWhere.size() > 0)
             {
                l.add("<p>");
                l.add("<u><b>WHERE</b></u>");
@@ -436,7 +448,7 @@ public class QueryAnalyzer
                l.add("</pre>");
             }
 
-            if (tableSet != null)
+            if (tableSet != null && tableSet.size() > 0)
             {
                l.add("<p>");
                l.add("<u><b>SET</b></u>");
@@ -445,7 +457,7 @@ public class QueryAnalyzer
                l.add("</pre>");
             }
 
-            if (inserts.get(tableName) != null)
+            if (inserts.get(tableName) != null && inserts.get(tableName).size() > 0)
             {
                l.add("<p>");
                l.add("<u><b>INSERT</b></u>");
@@ -454,7 +466,7 @@ public class QueryAnalyzer
                l.add("</pre>");
             }
 
-            if (updates.get(tableName) != null)
+            if (updates.get(tableName) != null && updates.get(tableName).size() > 0)
             {
                l.add("<p>");
                l.add("<u><b>UPDATE</b></u>");
@@ -463,7 +475,7 @@ public class QueryAnalyzer
                l.add("</pre>");
             }
 
-            if (deletes.get(tableName) != null)
+            if (deletes.get(tableName) != null && deletes.get(tableName).size() > 0)
             {
                l.add("<p>");
                l.add("<u><b>DELETE</b></u>");
@@ -874,10 +886,51 @@ public class QueryAnalyzer
 
          try
          {
-            if (query.indexOf("?") != -1)
-               query = rewriteQuery(c, key, query, types, values);
-
             Set<String> usedTables = getUsedTables(c, origQuery);
+
+            if (query.indexOf("?") != -1)
+            {
+               query = rewriteQuery(c, key, query, types, values);
+            }
+            else
+            {
+               net.sf.jsqlparser.statement.Statement s = CCJSqlParserUtil.parse(query);
+               for (String table : usedTables)
+               {
+                  if (s instanceof Select)
+                  {
+                     Set<String> ids = selects.get(table);
+                     if (ids == null)
+                        ids = new TreeSet<>();
+                     ids.add(key);
+                     selects.put(table, ids);
+                  }
+                  else if (s instanceof Update)
+                  {
+                     Set<String> ids = updates.get(table);
+                     if (ids == null)
+                        ids = new TreeSet<>();
+                     ids.add(key);
+                     updates.put(table, ids);
+                  }
+                  else if (s instanceof Delete)
+                  {
+                     Set<String> ids = deletes.get(table);
+                     if (ids == null)
+                        ids = new TreeSet<>();
+                     ids.add(key);
+                     deletes.put(table, ids);
+                  }
+                  else if (s instanceof Insert)
+                  {
+                     Set<String> ids = inserts.get(table);
+                     if (ids == null)
+                        ids = new TreeSet<>();
+                     ids.add(key);
+                     inserts.put(table, ids);
+                  }
+               }
+            }
 
             if (query != null)
             {
