@@ -2445,6 +2445,20 @@ public class QueryAnalyzer
       {
          this.queryId = queryId;
          this.statement = statement;
+
+         if (statement instanceof Select)
+         {
+            SelectDeParser deparser = new SelectDeParser()
+            {
+               @Override
+               public void visit(Table table)
+               {
+                  if (table.getAlias() != null && !table.getAlias().getName().equals(""))
+                     aliases.put(table.getAlias().getName().toLowerCase(), table.getName().toLowerCase());
+               }
+            };
+            ((Select)statement).getSelectBody().accept(deparser);
+         }
       }
 
       @Override
