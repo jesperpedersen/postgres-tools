@@ -2,7 +2,7 @@
 #
 # The MIT License (MIT)
 #
-# Copyright (c) 2016 Jesper Pedersen <jesper.pedersen@comcast.net>
+# Copyright (c) 2017 Jesper Pedersen <jesper.pedersen@comcast.net>
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the "Software"),
@@ -25,16 +25,17 @@
 SECONDS=0
 DATE=`date +"%Y%m%d"`
 CLIENTS="1 10 25 50 75 100 125 150 175 200"
+TCP=0
 HOST=localhost
 PORT=5432
 SCALE=3000
 TIME=180
-PGSQL_ROOT=/opt/postgresql-9.6
-PGSQL_DATA=/mnt/data/9.6
-PGSQL_XLOG=/mnt/xlog/9.6
+PGSQL_ROOT=/opt/postgresql-10.x
+PGSQL_DATA=/mnt/data/10.x
+PGSQL_XLOG=/mnt/xlog/10.x
 COMPILE_OPTIONS="--with-openssl --with-gssapi --enable-debug --enable-depend"
 COMPILE_JOBS=60
-CONFIGURATION=/home/postgres/Configuration/9.6
+CONFIGURATION=/home/postgres/Configuration/10.x
 RUN_ONEPC=1
 RUN_ONEPCP=1
 RUN_RO=1
@@ -80,14 +81,24 @@ function postgresql_compile()
 
 function pgbench_init_logged()
 {
-    $PGSQL_ROOT/bin/createdb -h $HOST -p $PORT -E UTF8 pgbench >> $DATE-$HEAD-build.log
-    $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -i -s $SCALE -q pgbench >> $DATE-$HEAD-build.log
+    if [ "$TCP" = "1" ]; then
+        $PGSQL_ROOT/bin/createdb -h $HOST -p $PORT -E UTF8 pgbench >> $DATE-$HEAD-build.log
+        $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -i -s $SCALE -q pgbench >> $DATE-$HEAD-build.log
+    else
+        $PGSQL_ROOT/bin/createdb -E UTF8 pgbench >> $DATE-$HEAD-build.log
+        $PGSQL_ROOT/bin/pgbench -i -s $SCALE -q pgbench >> $DATE-$HEAD-build.log
+    fi
 }
 
 function pgbench_init_unlogged()
 {
-    $PGSQL_ROOT/bin/createdb -h $HOST -p $PORT -E UTF8 pgbench >> $DATE-$HEAD-build.log
-    $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -i -s $SCALE -q --unlogged-tables pgbench >> $DATE-$HEAD-build.log
+    if [ "$TCP" = "1" ]; then
+        $PGSQL_ROOT/bin/createdb -h $HOST -p $PORT -E UTF8 pgbench >> $DATE-$HEAD-build.log
+        $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -i -s $SCALE -q --unlogged-tables pgbench >> $DATE-$HEAD-build.log
+    else
+        $PGSQL_ROOT/bin/createdb -E UTF8 pgbench >> $DATE-$HEAD-build.log
+        $PGSQL_ROOT/bin/pgbench -i -s $SCALE -q --unlogged-tables pgbench >> $DATE-$HEAD-build.log
+    fi
 }
 
 function pgbench_1pc_standard()
@@ -96,7 +107,11 @@ function pgbench_1pc_standard()
     touch $FILE
     for i in $CLIENTS; do
         echo "DATA "$i >> $FILE
-        $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -T $TIME -U postgres pgbench >> $FILE
+        if [ "$TCP" = "1" ]; then
+            $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -T $TIME -U postgres pgbench >> $FILE
+        else
+            $PGSQL_ROOT/bin/pgbench -c $i -j $i -T $TIME -U postgres pgbench >> $FILE
+        fi
         echo "" >> $FILE
     done
 }
@@ -107,7 +122,11 @@ function pgbench_1pc_prepared()
     touch $FILE
     for i in $CLIENTS; do
         echo "DATA "$i >> $FILE
-        $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -M prepared -T $TIME -U postgres pgbench >> $FILE
+        if [ "$TCP" = "1" ]; then
+            $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -M prepared -T $TIME -U postgres pgbench >> $FILE
+        else
+            $PGSQL_ROOT/bin/pgbench -c $i -j $i -M prepared -T $TIME -U postgres pgbench >> $FILE
+        fi
         echo "" >> $FILE
     done
 }
@@ -118,7 +137,11 @@ function pgbench_readonly()
     touch $FILE
     for i in $CLIENTS; do
         echo "DATA "$i >> $FILE
-        $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -S -T $TIME -U postgres pgbench >> $FILE
+        if [ "$TCP" = "1" ]; then
+            $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -S -T $TIME -U postgres pgbench >> $FILE
+        else
+            $PGSQL_ROOT/bin/pgbench -c $i -j $i -S -T $TIME -U postgres pgbench >> $FILE
+        fi
         echo "" >> $FILE
     done
 }
@@ -129,7 +152,11 @@ function pgbench_2pc_standard()
     touch $FILE
     for i in $CLIENTS; do
         echo "DATA "$i >> $FILE
-        $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -X -T $TIME -U postgres pgbench >> $FILE
+        if [ "$TCP" = "1" ]; then
+            $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -X -T $TIME -U postgres pgbench >> $FILE
+        else
+            $PGSQL_ROOT/bin/pgbench -c $i -j $i -X -T $TIME -U postgres pgbench >> $FILE
+        fi
         echo "" >> $FILE
     done
 }
