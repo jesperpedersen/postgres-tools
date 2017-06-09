@@ -25,6 +25,10 @@ Overview and interactions of queries sent
 
 Analysis of LWLock usage using flamegraphs
 
+### LWLockStats
+
+Analysis of LWLock usage using flamegraphs - manuel version of ```LWLockRun```
+
 ### PerfRun
 
 Flamegraphs of perf record runs
