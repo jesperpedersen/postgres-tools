@@ -49,7 +49,9 @@ import java.util.TreeSet;
 
 import net.sf.jsqlparser.expression.JdbcParameter;
 import net.sf.jsqlparser.expression.LongValue;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
+import net.sf.jsqlparser.expression.operators.relational.ItemsListVisitorAdapter;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
@@ -118,6 +120,9 @@ public class QueryAnalyzer
    /** Tables:        Name        Column  Type */
    private static Map<String, Map<String, Integer>> tables = new TreeMap<>();
    
+   /** Column sizes:  Name        Column  Size */
+   private static Map<String, Map<String, Integer>> columnSizes = new TreeMap<>();
+
    /** Indexes:       Table       Index   Columns */
    private static Map<String, Map<String, List<String>>> indexes = new TreeMap<>();
    
@@ -255,6 +260,7 @@ public class QueryAnalyzer
          l.add("<h2>" + tableName.toUpperCase() + " (" + size + ")</h2>");
 
          Map<String, Integer> tableData = tables.get(tableName);
+         Map<String, Integer> columnSize = columnSizes.get(tableName);
          List<String> pkInfo = primaryKeys.get(tableName);
          Map<String, Map<String, String>> exp = exports.get(tableName.toLowerCase());
          Map<String, Map<String, String>> imp = imports.get(tableName.toLowerCase());
@@ -263,15 +269,24 @@ public class QueryAnalyzer
          for (String columnName : tableData.keySet())
          {
             l.add("<tr>");
+            String typeName = getTypeName(tableData.get(columnName));
+            if (typeName == null)
+            {
+               typeName = getTypeName(c, tableName, columnName);
+            }
+            if ("CHAR".equals(typeName) || "VARCHAR".equals(typeName))
+            {
+               typeName = typeName + "(" + columnSize.get(columnName) + ")";
+            }
             if (pkInfo.contains(columnName))
             {
                l.add("<td><b>" + columnName + "</b></td>");
-               l.add("<td><b>" + getTypeName(tableData.get(columnName)) + "</b></td>");
+               l.add("<td><b>" + typeName + "</b></td>");
             }
             else
             {
                l.add("<td>" + columnName + "</td>");
-               l.add("<td>" + getTypeName(tableData.get(columnName)) + "</td>");
+               l.add("<td>" + typeName + "</td>");
             }
             l.add("</tr>");
          }
@@ -284,9 +299,18 @@ public class QueryAnalyzer
             l.add("<table>");
             for (String columnName : pkInfo)
             {
+               String typeName = getTypeName(tableData.get(columnName));
+               if (typeName == null)
+               {
+                  typeName = getTypeName(c, tableName, columnName);
+               }
+               if ("CHAR".equals(typeName) || "VARCHAR".equals(typeName))
+               {
+                  typeName = typeName + "(" + columnSize.get(columnName) + ")";
+               }
                l.add("<tr>");
                l.add("<td><b>" + columnName + "</b></td>");
-               l.add("<td><b>" + getTypeName(tableData.get(columnName)) + "</b></td>");
+               l.add("<td><b>" + typeName + "</b></td>");
                l.add("</tr>");
             }
             l.add("</table>");
@@ -515,13 +539,15 @@ public class QueryAnalyzer
     * @param plan The plan
     * @param types Types used in the prepared query
     * @param values Values used in the prepared query
+    * @param c The connection
     */
    private static void writeReport(String queryId,
                                    String origQuery, String query,
                                    Set<String> usedTables,
                                    String plan,
                                    List<Integer> types,
-                                   List<String> values) throws Exception
+                                   List<String> values,
+                                   Connection c) throws Exception
    {
       int number = -1;
 
@@ -584,10 +610,13 @@ public class QueryAnalyzer
             {
                String v = values.get(i);
 
-               if (v.startsWith("'") && v.endsWith("'"))
-                  v = v.substring(1, v.length() - 1);
+               if (v != null)
+               {
+                  if (v.startsWith("'") && v.endsWith("'"))
+                     v = v.substring(1, v.length() - 1);
 
-               sb = sb.append(v);
+                  sb = sb.append(v);
+               }
                if (i < values.size() - 1)
                   sb = sb.append("|");
             }
@@ -663,6 +692,7 @@ public class QueryAnalyzer
       for (String tableName : usedTables)
       {
          Map<String, Integer> tableData = tables.get(tableName);
+         Map<String, Integer> columnSize = columnSizes.get(tableName);
          List<String> pkInfo = primaryKeys.get(tableName);
          if (tableData != null)
          {
@@ -671,15 +701,24 @@ public class QueryAnalyzer
             for (String columnName : tableData.keySet())
             {
                l.add("<tr>");
+               String typeName = getTypeName(tableData.get(columnName));
+               if (typeName == null)
+               {
+                  typeName = getTypeName(c, tableName, columnName);
+               }
+               if ("CHAR".equals(typeName) || "VARCHAR".equals(typeName))
+               {
+                  typeName = typeName + "(" + columnSize.get(columnName) + ")";
+               }
                if (pkInfo.contains(columnName))
                {
                   l.add("<td><b>" + columnName + "</b></td>");
-                  l.add("<td><b>" + getTypeName(tableData.get(columnName)) + "</b></td>");
+                  l.add("<td><b>" + typeName + "</b></td>");
                }
                else
                {
                   l.add("<td>" + columnName + "</td>");
-                  l.add("<td>" + getTypeName(tableData.get(columnName)) + "</td>");
+                  l.add("<td>" + typeName + "</td>");
                }
                l.add("</tr>");
             }
@@ -898,6 +937,7 @@ public class QueryAnalyzer
          try
          {
             Set<String> usedTables = getUsedTables(c, origQuery);
+            net.sf.jsqlparser.statement.Statement statement = CCJSqlParserUtil.parse(query);
 
             if (query.indexOf("?") != -1)
             {
@@ -905,10 +945,9 @@ public class QueryAnalyzer
             }
             else
             {
-               net.sf.jsqlparser.statement.Statement s = CCJSqlParserUtil.parse(query);
                for (String table : usedTables)
                {
-                  if (s instanceof Select)
+                  if (statement instanceof Select)
                   {
                      Set<String> ids = selects.get(table);
                      if (ids == null)
@@ -916,7 +955,7 @@ public class QueryAnalyzer
                      ids.add(key);
                      selects.put(table, ids);
                   }
-                  else if (s instanceof Update)
+                  else if (statement instanceof Update)
                   {
                      Set<String> ids = updates.get(table);
                      if (ids == null)
@@ -924,7 +963,7 @@ public class QueryAnalyzer
                      ids.add(key);
                      updates.put(table, ids);
                   }
-                  else if (s instanceof Delete)
+                  else if (statement instanceof Delete)
                   {
                      Set<String> ids = deletes.get(table);
                      if (ids == null)
@@ -932,7 +971,7 @@ public class QueryAnalyzer
                      ids.add(key);
                      deletes.put(table, ids);
                   }
-                  else if (s instanceof Insert)
+                  else if (statement instanceof Insert)
                   {
                      Set<String> ids = inserts.get(table);
                      if (ids == null)
@@ -946,13 +985,16 @@ public class QueryAnalyzer
             if (query != null)
             {
                boolean eavb = true;
-               for (String table : usedTables)
+               if (!(statement instanceof Select))
                {
-                  if (exports.containsKey(table.toLowerCase()))
-                     eavb = false;
+                  for (String table : usedTables)
+                  {
+                     if (exports.containsKey(table.toLowerCase()))
+                        eavb = false;
 
-                  if (imports.containsKey(table.toLowerCase()))
-                     eavb = false;
+                     if (imports.containsKey(table.toLowerCase()))
+                        eavb = false;
+                  }
                }
 
                for (int i = 0; i < planCount; i++)
@@ -995,12 +1037,14 @@ public class QueryAnalyzer
                }
             }
 
-            writeReport(key, origQuery, query, usedTables, plan, types, values);
+            writeReport(key, origQuery, query, usedTables, plan, types, values, c);
          }
          catch (Exception e)
          {
             System.out.println("Original query: " + origQuery);
-            System.out.println("Data: " + data);
+            System.out.println("Key           : " + key);
+            System.out.println("Data          :");
+            System.out.println(data);
             throw e;
          }
       }
@@ -1188,7 +1232,7 @@ public class QueryAnalyzer
                   }
                }
 
-               if (newIndex.size() > 0)
+               if (newIndex.size() > 0 && !suggested.contains(newIndex))
                {
                   StringBuilder indexName = new StringBuilder();
                   if (!hot)
@@ -1239,7 +1283,7 @@ public class QueryAnalyzer
       if (s instanceof Select)
       {
          Select select = (Select)s;
-         Map<String, Set<String>> extraIndexes = new TreeMap<>();
+         Map<String, List<String>> extraIndexes = new TreeMap<>();
          
          StringBuilder buffer = new StringBuilder();
          ExpressionDeParser expressionDeParser = new ExpressionDeParser()
@@ -1264,6 +1308,8 @@ public class QueryAnalyzer
                   if (data == null)
                   {
                      data = getDefaultValue(type);
+                     if (data == null)
+                        System.out.println("Unsupported type " + type + " for " + query);
                      if (needsQuotes(data))
                         data = "'" + data + "'";
                   }
@@ -1318,11 +1364,11 @@ public class QueryAnalyzer
                   
                   if (tableName != null)
                   {
-                     Set<String> cols = extraIndexes.get(tableName);
+                     List<String> cols = extraIndexes.get(tableName);
                      if (cols == null)
-                        cols = new HashSet<>();
+                        cols = new ArrayList<>();
                   
-                     cols.add(column.getColumnName());
+                     cols.add(0, column.getColumnName());
                      extraIndexes.put(tableName, cols);
                   }
                }
@@ -1382,10 +1428,24 @@ public class QueryAnalyzer
             {
                Limit limit = new Limit();
                limit.setRowCount(new LongValue(1L));
-               plainSelect.setLimit(limit);
 
                values.add(Integer.toString(1));
                types.add(Integer.valueOf(Types.INTEGER));
+
+               if (plainSelect.getLimit().getOffset() != null)
+               {
+                  limit.setOffset(new LongValue(0));
+                  values.add(Integer.toString(0));
+                  types.add(Integer.valueOf(Types.INTEGER));
+               }
+
+               plainSelect.setLimit(limit);
+            }
+
+            if (plainSelect.getOffset() != null)
+            {
+               plainSelect.getOffset().setOffset(0);
+               plainSelect.getOffset().setOffsetJdbcParameter(false);
             }
 
             select.setSelectBody(plainSelect);
@@ -1395,7 +1455,7 @@ public class QueryAnalyzer
 
          for (String tableName : extraIndexes.keySet())
          {
-            Set<String> vals = extraIndexes.get(tableName);
+            List<String> vals = extraIndexes.get(tableName);
             
             if (aliases.containsKey(tableName))
                tableName = aliases.get(tableName);
@@ -1469,7 +1529,7 @@ public class QueryAnalyzer
                   if (l == null)
                      l = new ArrayList<>();
 
-                  l.add(0, column.getColumnName().toLowerCase());
+                  l.add(column.getColumnName().toLowerCase());
                   m.put(queryId, l);
                   where.put(currentTableName.toLowerCase(), m);
                }
@@ -1593,16 +1653,20 @@ public class QueryAnalyzer
             {
                inExpressionColumn = null;
 
-               ExpressionDeParser inExpressionDeParser = new ExpressionDeParser()
+               if (inExpression.getLeftExpression() != null)
                {
-                  @Override
-                  public void visit(Column column)
+                  ExpressionDeParser inExpressionDeParser = new ExpressionDeParser()
                   {
-                     inExpressionColumn = column.getColumnName().toLowerCase();
-                  }
-               };
+                     @Override
+                     public void visit(Column column)
+                     {
+                        inExpressionColumn = column.getColumnName().toLowerCase();
+                        this.getBuffer().append(column);
+                     }
+                  };
 
-               inExpression.getLeftExpression().accept(inExpressionDeParser);
+                  inExpression.getLeftExpression().accept(inExpressionDeParser);
+               }
 
                if (currentTableName != null && inExpressionColumn != null)
                {
@@ -1618,6 +1682,27 @@ public class QueryAnalyzer
                   m.put(queryId, l);
                   where.put(currentTableName, m);
                }
+
+               StringBuilder sb = new StringBuilder();
+               ExpressionDeParser rightExpressionDeParser = new ExpressionDeParser()
+               {
+                  @Override
+                  public void visit(net.sf.jsqlparser.statement.select.SubSelect ss)
+                  {
+                     SelectBodyVisitor sbv = new SelectBodyVisitor(queryId, ss.getSelectBody(),
+                                                                   c, query, types, values);
+                     sbv.process();
+                     this.getBuffer().append(sbv.getBuffer());
+                  }
+               };
+               rightExpressionDeParser.setBuffer(sb);
+               inExpression.getRightItemsList().accept(rightExpressionDeParser);
+
+               this.getBuffer().append(inExpression.getLeftExpression());
+               this.getBuffer().append(" IN ");
+               this.getBuffer().append("(");
+               this.getBuffer().append(rightExpressionDeParser.getBuffer());
+               this.getBuffer().append(")");
             }
          };
          expressionDeParser.setBuffer(buffer);
@@ -1850,7 +1935,6 @@ public class QueryAnalyzer
          case Types.VARCHAR:
             return rs.getString(col);
          default:
-            System.out.println("Unsupported value: " + type);
             break;
       }
 
@@ -1909,7 +1993,6 @@ public class QueryAnalyzer
          case Types.VARCHAR:
             return "";
          default:
-            System.out.println("Unsupported value: " + type);
             break;
       }
 
@@ -1985,11 +2068,56 @@ public class QueryAnalyzer
          case Types.VARCHAR:
             return "VARCHAR";
          default:
-            System.out.println("Unsupported value: " + type);
             break;
       }
 
       return null;
+   }
+
+   /**
+    * Get type name
+    * @param c The connection
+    * @param table The table name
+    * @param column The column name
+    * @return The name
+    */
+   private static String getTypeName(Connection c, String table, String column)
+   {
+      String result = "UNKNOWN";
+      ResultSet rs = null;
+      try
+      {
+         DatabaseMetaData dmd = c.getMetaData();
+
+         rs = dmd.getColumns(null, null, table, "");
+         while (rs.next())
+         {
+            String columnName = rs.getString("COLUMN_NAME");
+            columnName = columnName.toLowerCase();
+
+            if (columnName.equals(column))
+               result = rs.getString("TYPE_NAME");
+         }
+      }
+      catch (Exception e)
+      {
+         // Nothing we can do
+      }
+      finally
+      {
+         if (rs != null)
+         {
+            try
+            {
+               rs.close();
+            }
+            catch (Exception e)
+            {
+               // Ignore
+            }
+         }
+      }
+      return result.toUpperCase();
    }
 
    /**
@@ -2044,7 +2172,12 @@ public class QueryAnalyzer
                for (int i = 1; i <= numberOfColumns; i++)
                {
                   int type = types[i - 1];
-                  sb = sb.append(getResultSetValue(rs, i, type));
+                  Object o = getResultSetValue(rs, i, type);
+                  if (o == null)
+                  {
+                     System.out.println("Unsupported type " + type + " for " + s);
+                  }
+                  sb = sb.append(o);
 
                   if (i < numberOfColumns)
                      sb = sb.append(",");
@@ -2060,7 +2193,7 @@ public class QueryAnalyzer
       }
       catch (Exception e)
       {
-         System.out.println("Query: " + s);
+         System.out.println("Query         : " + s);
          throw e;
       }
       finally
@@ -2119,6 +2252,7 @@ public class QueryAnalyzer
          if (!tables.containsKey(tableName))
          {
             Map<String, Integer> tableData = new TreeMap<>();
+            Map<String, Integer> columnSize = new TreeMap<>();
             ResultSet rs = null;
             try
             {
@@ -2132,9 +2266,13 @@ public class QueryAnalyzer
 
                   int dataType = rs.getInt("DATA_TYPE");
                   tableData.put(columnName, dataType);
+
+                  int size = rs.getInt("COLUMN_SIZE");
+                  columnSize.put(columnName, size);
                }
             
                tables.put(tableName, tableData);
+               columnSizes.put(tableName, columnSize);
             }
             finally
             {
@@ -2481,6 +2619,153 @@ public class QueryAnalyzer
             {
                // Nothing to do
             }
+         }
+      }
+   }
+
+   /**
+    * SelectBody visitor
+    */
+   static class SelectBodyVisitor
+   {
+      private String queryId;
+      private net.sf.jsqlparser.statement.select.SelectBody selectBody;
+      private Connection c;
+      private String query;
+      private List<Integer> types;
+      private List<String> values;
+      private StringBuilder buffer;
+
+      SelectBodyVisitor(String qid, net.sf.jsqlparser.statement.select.SelectBody sb,
+                        Connection c, String query, List<Integer> types, List<String> values)
+      {
+         this.queryId = qid;
+         this.selectBody = sb;
+         this.c = c;
+         this.query = query;
+         this.types = types;
+         this.values = values;
+         this.buffer = new StringBuilder();
+      }
+
+      StringBuilder getBuffer()
+      {
+         return buffer;
+      }
+
+      void process()
+      {
+         Map<String, List<String>> extraIndexes = new TreeMap<>();
+
+         ExpressionDeParser expressionDeParser = new ExpressionDeParser()
+         {
+            private Column currentColumn = null;
+
+            @Override
+            public void visit(Column column)
+            {
+               currentColumn = column;
+               this.getBuffer().append(column);
+            }
+
+            @Override
+            public void visit(JdbcParameter jdbcParameter)
+            {
+               try
+               {
+                  Object data = getData(c, currentColumn);
+                  Integer type = getType(c, currentColumn, query);
+
+                  if (data == null)
+                  {
+                     data = getDefaultValue(type);
+                     if (data == null)
+                        System.out.println("Unsupported type " + type + " for " + query);
+                     if (needsQuotes(data))
+                        data = "'" + data + "'";
+                  }
+
+                  values.add(data.toString());
+                  types.add(type);
+
+                  this.getBuffer().append(data);
+               }
+               catch (Exception e)
+               {
+                  e.printStackTrace();
+               }
+            }
+         };
+
+         SelectDeParser deparser = new SelectDeParser(expressionDeParser, buffer)
+         {
+            @Override
+            public void visit(Table table)
+            {
+               currentTableName = table.getName();
+
+               if (table.getAlias() != null && !table.getAlias().getName().equals(""))
+                  aliases.put(table.getAlias().getName().toLowerCase(), currentTableName.toLowerCase());
+
+               this.getBuffer().append(table);
+            }
+         };
+         expressionDeParser.setSelectVisitor(deparser);
+         expressionDeParser.setBuffer(buffer);
+
+         if (selectBody instanceof PlainSelect)
+         {
+            PlainSelect plainSelect = (PlainSelect)selectBody;
+
+            ExpressionDeParser extraIndexExpressionDeParser = new ExpressionDeParser()
+            {
+               @Override
+               public void visit(Column column)
+               {
+                  String tableName = null;
+                  if (column.getTable() != null)
+                     tableName = column.getTable().getName();
+
+                  if (tableName != null)
+                  {
+                     List<String> cols = extraIndexes.get(tableName);
+                     if (cols == null)
+                        cols = new ArrayList<>();
+
+                     cols.add(0, column.getColumnName());
+                     extraIndexes.put(tableName, cols);
+                  }
+               }
+            };
+
+            if (plainSelect.getWhere() != null)
+            {
+               plainSelect.getWhere().accept(extraIndexExpressionDeParser);
+            }
+         }
+
+         selectBody.accept(deparser);
+
+         for (String tableName : extraIndexes.keySet())
+         {
+            List<String> vals = extraIndexes.get(tableName);
+
+            if (aliases.containsKey(tableName))
+               tableName = aliases.get(tableName);
+
+            Map<String, List<String>> m = where.get(tableName);
+            if (m == null)
+               m = new TreeMap<>();
+
+            List<String> l = m.get(queryId);
+            if (l == null)
+               l = new ArrayList<>();
+
+            for (String col : vals)
+               l.add(0, col.toLowerCase());
+
+            m.put(queryId, l);
+            where.put(tableName, m);
          }
       }
    }

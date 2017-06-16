@@ -44,7 +44,7 @@ Alternative, Queryanalyzer can be configured through another properties file and
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:postgresql-9.4.1207.jar:jsqlparser-0.9.5.jar QueryAnalyzer -c myprops.properties
+/path/to/java -classpath .:postgresql-42.1.1.jar:jsqlparser-1.0.jar QueryAnalyzer -c myprops.properties
 ```
 
 ### host
