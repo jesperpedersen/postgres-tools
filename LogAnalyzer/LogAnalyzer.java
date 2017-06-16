@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2016 Jesper Pedersen <jesper.pedersen@comcast.net>
+ * Copyright (c) 2017 Jesper Pedersen <jesper.pedersen@comcast.net>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -51,6 +51,54 @@ public class LogAnalyzer
 {
    /** Default configuration */
    private static final String DEFAULT_CONFIGURATION = "loganalyzer.properties";
+
+   /** Log line type: EOF */
+   private static final int EOF = -1;
+
+   /** Log line type: UNKNOWN */
+   private static final int UNKNOWN = 0;
+
+   /** Log line type: PANIC */
+   private static final int PANIC = 1;
+
+   /** Log line type: FATAL */
+   private static final int FATAL = 2;
+
+   /** Log line type: ERROR */
+   private static final int ERROR = 3;
+
+   /** Log line type: WARNING */
+   private static final int WARNING = 4;
+
+   /** Log line type: INFO */
+   private static final int INFO = 5;
+
+   /** Log line type: DEBUG1 */
+   private static final int DEBUG1 = 6;
+
+   /** Log line type: DEBUG2 */
+   private static final int DEBUG2 = 7;
+
+   /** Log line type: DEBUG3 */
+   private static final int DEBUG3 = 8;
+
+   /** Log line type: DEBUG4 */
+   private static final int DEBUG4 = 9;
+
+   /** Log line type: DEBUG5 */
+   private static final int DEBUG5 = 10;
+
+   /** Log line type: STATEMENT */
+   private static final int STATEMENT = 11;
+
+   /** Log line type: DETAIL */
+   private static final int DETAIL = 12;
+
+   /** Log line type: LOG */
+   private static final int LOG = 13;
+
+   /** Log line type: NOTICE */
+   private static final int NOTICE = 14;
 
    /** Date format */
    private static DateFormat df;
@@ -1017,6 +1065,92 @@ public class LogAnalyzer
    }
    
    /**
+    * Get the type of the log line
+    * @param s The string
+    * @return The type
+    */
+   private static int getLogLineType(String s)
+   {
+      if (s == null || "".equals(s))
+         return EOF;
+
+      int bracket1Start = s.indexOf("[");
+      int bracket1End = s.indexOf("]");
+
+      if (bracket1Start != -1)
+      {
+         int bracket2Start = s.indexOf("[", bracket1End + 1);
+         int bracket2End = s.indexOf("]", bracket1End + 1);
+
+         String type = s.substring(bracket2End + 2, s.indexOf(":", bracket2End + 2));
+
+         if ("LOG".equals(type))
+         {
+            return LOG;
+         }
+         else if ("STATEMENT".equals(type))
+         {
+            return STATEMENT;
+         }
+         else if ("DETAIL".equals(type))
+         {
+            return DETAIL;
+         }
+         else if ("NOTICE".equals(type))
+         {
+            return NOTICE;
+         }
+         else if ("PANIC".equals(type))
+         {
+            return PANIC;
+         }
+         else if ("FATAL".equals(type))
+         {
+            return FATAL;
+         }
+         else if ("ERROR".equals(type))
+         {
+            return ERROR;
+         }
+         else if ("WARNING".equals(type))
+         {
+            return WARNING;
+         }
+         else if ("INFO".equals(type))
+         {
+            return INFO;
+         }
+         else if ("DEBUG1".equals(type))
+         {
+            return DEBUG1;
+         }
+         else if ("DEBUG2".equals(type))
+         {
+            return DEBUG2;
+         }
+         else if ("DEBUG3".equals(type))
+         {
+            return DEBUG3;
+         }
+         else if ("DEBUG4".equals(type))
+         {
+            return DEBUG4;
+         }
+         else if ("DEBUG5".equals(type))
+         {
+            return DEBUG5;
+         }
+         else
+         {
+            System.out.println("Unknown log line type for: " + s);
+            System.exit(1);
+         }
+      }
+
+      return UNKNOWN;
+   }
+
+   /**
     * Process the log
     */
    private static void processLog() throws Exception
@@ -1025,15 +1159,27 @@ public class LogAnalyzer
       FileReader fr = null;
       LineNumberReader lnr = null;
       String s = null;
+      String str = null;
       LogEntry le = null;
       try
       {
          fr = new FileReader(Paths.get(filename).toFile());
          lnr = new LineNumberReader(fr);
+         s = lnr.readLine();
 
-         while ((s = lnr.readLine()) != null)
+         while (s != null)
          {
-            le = new LogEntry(s);
+            str = s;
+            s = lnr.readLine();
+
+            while (getLogLineType(s) == UNKNOWN)
+            {
+               str += " ";
+               str += s.trim();
+               s = lnr.readLine();
+            }
+
+            le = new LogEntry(str);
 
             // Raw data insert
             if (keepRaw)
