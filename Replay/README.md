@@ -94,6 +94,12 @@ Required option.
 
 The maximum number of connections used.
 
+#### quiet
+
+If ```false``` will output status when the tool is preparing for the run.
+
+Default is ```true```.
+
 ### Run
 
 ```bash
