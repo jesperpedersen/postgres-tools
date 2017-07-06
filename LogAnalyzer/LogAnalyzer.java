@@ -1181,76 +1181,79 @@ public class LogAnalyzer
 
             le = new LogEntry(str);
 
-            // Raw data insert
-            if (keepRaw)
+            if (!removeStatement(le.getStatement()))
             {
-               List<String> ls = rawData.get(le.getProcessId());
-               if (ls == null)
-                  ls = new ArrayList<>();
-               ls.add(s);
-               rawData.put(le.getProcessId(), ls);
-            }
-
-            // Data insert
-            List<LogEntry> lle = data.get(le.getProcessId());
-            if (lle == null)
-               lle = new ArrayList<>();
-            lle.add(le);
-            data.put(le.getProcessId(), lle);
-         
-            if (le.isParse())
-            {
-               parseTime += le.getDuration();
-            }
-            else if (le.isBind())
-            {
-               bindTime += le.getDuration();
-
-               String stmt = le.getStatement();
-               if (stmt == null || "".equals(stmt.trim()))
+               // Raw data insert
+               if (keepRaw)
                {
-                  emptyTime += le.getDuration() + lle.get(lle.size() - 2).getDuration();
+                  List<String> ls = rawData.get(le.getProcessId());
+                  if (ls == null)
+                     ls = new ArrayList<>();
+                  ls.add(s);
+                  rawData.put(le.getProcessId(), ls);
                }
-               else
+
+               // Data insert
+               List<LogEntry> lle = data.get(le.getProcessId());
+               if (lle == null)
+                  lle = new ArrayList<>();
+               lle.add(le);
+               data.put(le.getProcessId(), lle);
+         
+               if (le.isParse())
                {
-                  if (le.getStatement().equals("BEGIN"))
+                  parseTime += le.getDuration();
+               }
+               else if (le.isBind())
+               {
+                  bindTime += le.getDuration();
+
+                  String stmt = le.getStatement();
+                  if (stmt == null || "".equals(stmt.trim()))
                   {
-                     clients.add(le.getProcessId());
+                     emptyTime += le.getDuration() + lle.get(lle.size() - 2).getDuration();
+                  }
+                  else
+                  {
+                     if (le.getStatement().equals("BEGIN"))
+                     {
+                        clients.add(le.getProcessId());
+                     }
                   }
                }
-            }
-            else if (le.isExecute() || le.isStmt())
-            {
-               executeTime += le.getDuration();
-
-               String stmt = le.getStatement();
-
-               // Statements insert
-               Integer count = statements.get(stmt);
-               if (count == null)
+               else if (le.isExecute() || le.isStmt())
                {
-                  count = Integer.valueOf(1);
-               }
-               else
-               {
-                  count = Integer.valueOf(count.intValue() + 1);
-               }
-               statements.put(stmt, count);
+                  executeTime += le.getDuration();
 
-               if (le.getStatement().startsWith("COMMIT") || le.getStatement().startsWith("ROLLBACK"))
-               {
-                  if (maxClients < clients.size())
-                     maxClients = clients.size();
+                  String stmt = le.getStatement();
 
-                  clients.remove(le.getProcessId());
+                  // Statements insert
+                  Integer count = statements.get(stmt);
+                  if (count == null)
+                  {
+                     count = Integer.valueOf(1);
+                  }
+                  else
+                  {
+                     count = Integer.valueOf(count.intValue() + 1);
+                  }
+                  statements.put(stmt, count);
+
+                  if (le.getStatement().startsWith("COMMIT") || le.getStatement().startsWith("ROLLBACK"))
+                  {
+                     if (maxClients < clients.size())
+                        maxClients = clients.size();
+
+                     clients.remove(le.getProcessId());
+                  }
                }
             }
 
             if (startDate == null)
                startDate = le.getTimestamp();
-         }
 
-         endDate = le.getTimestamp();
+            endDate = le.getTimestamp();
+         }
       }
       finally
       {
@@ -1282,6 +1285,22 @@ public class LogAnalyzer
           stmt.startsWith("ROLLBACK") ||
           stmt.startsWith("COMMIT") ||
           stmt.startsWith("PREPARE"))
+         return true;
+
+      return false;
+   }
+
+   /**
+    * Should the statement be removed from the report
+    * @param stmt The statement
+    * @return The result
+    */
+   private static boolean removeStatement(String stmt)
+   {
+      if (stmt == null)
+         return false;
+
+      if (stmt.startsWith("ANALYZE"))
          return true;
 
       return false;
