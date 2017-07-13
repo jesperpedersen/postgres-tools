@@ -156,6 +156,12 @@ public class QueryAnalyzer
    /** Import usage:  Table       Name        Key     Value */
    private static Map<String, Map<String, Map<String, String>>> imports = new TreeMap<>();
 
+   /** Row count:     Table   Rows */
+   private static Map<String, String> rowCounts = new TreeMap<>();
+
+   /** Index row count: Id    Rows */
+   private static Map<String, String> indexCounts = new TreeMap<>();
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -292,6 +298,14 @@ public class QueryAnalyzer
          }
          l.add("</table>");
 
+         if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
+         {
+            l.add("<p>");
+            l.add("<u><b>Rows</b></u>");
+            l.add("<p>");
+            l.add(getRowCount(c, tableName));
+         }
+
          l.add("<p>");
          l.add("<u><b>Primary key</b></u>");
          if (pkInfo.size() > 0)
@@ -337,6 +351,16 @@ public class QueryAnalyzer
                {
                   l.add("<td><b>" + idx.getKey() + "</b></td>");
                   l.add("<td><b>" + idx.getValue() + "</b></td>");
+
+                  if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
+                  {
+                     StringBuilder sb = new StringBuilder();
+                     sb.append(getIndexCount(c, tableName, idx.getValue()));
+                     sb.append(" / ");
+                     sb.append(getRowCount(c, tableName));
+
+                     l.add("<td>" + sb.toString() + "</td>");
+                  }
                }
                else
                {
@@ -352,6 +376,15 @@ public class QueryAnalyzer
 
                   l.add("<td style=\"color : " + color + "\">" + idx.getKey() + "</td>");
                   l.add("<td>" + idx.getValue() + "</td>");
+
+                  if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
+                  {
+                     StringBuilder sb = new StringBuilder();
+                     sb.append(getIndexCount(c, tableName, idx.getValue()));
+                     sb.append(" / ");
+                     sb.append(getRowCount(c, tableName));
+                     l.add("<td>" + sb.toString() + "</td>");
+                  }
                }
                l.add("</tr>");
             }
@@ -440,7 +473,7 @@ public class QueryAnalyzer
             }
             try
             {
-               l.addAll(suggestionIndexes(tableName, tableOn, tableWhere, tableSet, imports.get(tableName)));
+               l.addAll(suggestionIndexes(c, tableName, tableOn, tableWhere, tableSet, imports.get(tableName)));
             }
             catch (Exception e)
             {
@@ -1119,6 +1152,7 @@ public class QueryAnalyzer
    
    /**
     * Suggestion: Indexes
+    * @parma c The connection
     * @param tableName The table name
     * @param tableOn The columns accessed in ON per query
     * @param tableWhere The columns accessed in WHERE per query
@@ -1126,11 +1160,13 @@ public class QueryAnalyzer
     * @param imp Foreign index columns
     * @return The report data
     */
-   private static List<String> suggestionIndexes(String tableName,
+   private static List<String> suggestionIndexes(Connection c,
+                                                 String tableName,
                                                  Map<String, Set<String>> tableOn,
                                                  Map<String, List<String>> tableWhere,
                                                  Set<String> tableSet,
                                                  Map<String, Map<String, String>> imp)
+      throws Exception
    {
       List<String> result = new ArrayList<>();
       Set<List<String>> suggested = new HashSet<>();
@@ -1144,14 +1180,14 @@ public class QueryAnalyzer
       {
          for (List<String> l : tableWhere.values())
          {
-            Integer c = l.size();
-            List<List<String>> ll = counts.get(c);
+            Integer count = l.size();
+            List<List<String>> ll = counts.get(count);
             if (ll == null)
                ll = new ArrayList<>();
 
             if (!ll.contains(l))
                ll.add(l);
-            counts.put(c, ll);
+            counts.put(count, ll);
          }
       }
 
@@ -1164,14 +1200,14 @@ public class QueryAnalyzer
                List l = new ArrayList<>(1);
                l.add(s);
 
-               Integer c = Integer.valueOf(1);
-               List<List<String>> ll = counts.get(c);
+               Integer count = Integer.valueOf(1);
+               List<List<String>> ll = counts.get(count);
                if (ll == null)
                   ll = new ArrayList<>();
 
                if (!ll.contains(l))
                   ll.add(l);
-               counts.put(c, ll);
+               counts.put(count, ll);
             }
          }
       }
@@ -1183,14 +1219,14 @@ public class QueryAnalyzer
             List l = new ArrayList<>(1);
             l.add(me.get("FKCOLUMN_NAME"));
 
-            Integer c = Integer.valueOf(1);
-            List<List<String>> ll = counts.get(c);
+            Integer count = Integer.valueOf(1);
+            List<List<String>> ll = counts.get(count);
             if (ll == null)
                ll = new ArrayList<>();
 
             if (!ll.contains(l))
                ll.add(l);
-            counts.put(c, ll);
+            counts.put(count, ll);
          }
       }
 
@@ -1201,21 +1237,7 @@ public class QueryAnalyzer
          List<List<String>> ll = counts.get(count);
          for (List<String> l : ll)
          {
-            boolean include = true;
-            boolean hot = true;
-
-            if (l.size() == 1)
-            {
-               String val = l.get(0);
-
-               if (tableSet != null && tableSet.contains(val))
-                  hot = false;
-            }
-
-            if (include && suggested.contains(l))
-               include = false;
-
-            if (include)
+            if (!suggested.contains(l))
             {
                List<String> newIndex = new ArrayList<>();
                for (int i = 0; i < l.size(); i++)
@@ -1234,6 +1256,17 @@ public class QueryAnalyzer
 
                if (newIndex.size() > 0 && !suggested.contains(newIndex))
                {
+                  boolean hot = true;
+
+                  if (tableSet != null)
+                  {
+                     for (int i = 0; hot && i < newIndex.size(); i++)
+                     {
+                        if (tableSet.contains(newIndex.get(i)))
+                           hot = false;
+                     }
+                  }
+
                   StringBuilder indexName = new StringBuilder();
                   if (!hot)
                      indexName.append("<div style=\"color : " + COLOR_INDEX + "\">");
@@ -1253,6 +1286,17 @@ public class QueryAnalyzer
                   result.add("<td>IDX" + idx + "</td>");
                   result.add("<td>" + indexName.toString() + "</td>");
                   result.add("<td>" + newIndex + "</td>");
+
+                  if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
+                  {
+                     StringBuilder sb = new StringBuilder();
+                     sb.append(getIndexCount(c, tableName, newIndex));
+                     sb.append(" / ");
+                     sb.append(getRowCount(c, tableName));
+
+                     result.add("<td>" + sb.toString() + "</td>");
+                  }
+
                   result.add("</tr>");
                   suggested.add(newIndex);
                   idx++;
@@ -2476,6 +2520,71 @@ public class QueryAnalyzer
       String result = rs.getString(1);
       rs.close();
       stmt.close();
+      return result;
+   }
+
+   /**
+    * Get the number of unique rows for an index
+    * @param c The connection
+    * @param tableName The table name
+    * @param cols The index columns
+    * @return The size
+    */
+   private static String getIndexCount(Connection c, String tableName, List<String> cols) throws Exception
+   {
+      String id = tableName + "_" + cols.toString();
+      String result = indexCounts.get(id);
+
+      if (result == null)
+      {
+         StringBuilder sb = new StringBuilder();
+         sb.append("SELECT COUNT(DISTINCT(");
+         for (int i = 0; i < cols.size(); i++)
+         {
+            sb.append(cols.get(i));
+            if (i < cols.size() - 1)
+               sb.append(", ");
+         }
+         sb.append(")) FROM ");
+         sb.append(tableName);
+
+         Statement stmt = c.createStatement();
+         stmt.execute(sb.toString());
+         ResultSet rs = stmt.getResultSet();
+         rs.next();
+         result = rs.getString(1);
+         rs.close();
+         stmt.close();
+
+         indexCounts.put(id, result);
+      }
+
+      return result;
+   }
+
+   /**
+    * Get the number of rows for a table
+    * @param c The connection
+    * @param tableName The table name
+    * @return The size
+    */
+   private static String getRowCount(Connection c, String tableName) throws Exception
+   {
+      String result = rowCounts.get(tableName);
+
+      if (result == null)
+      {
+         Statement stmt = c.createStatement();
+         stmt.execute("SELECT COUNT(*) FROM " + tableName);
+         ResultSet rs = stmt.getResultSet();
+         rs.next();
+         result = rs.getString(1);
+         rs.close();
+         stmt.close();
+
+         rowCounts.put(tableName, result);
+      }
+
       return result;
    }
 

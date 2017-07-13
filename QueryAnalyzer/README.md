@@ -83,6 +83,12 @@ The number of times the query should be executed before measured.
 
 Default is ```5```
 
+### row_information
+
+Display information about number of rows in each table, and number of index entries per index.
+
+Default is ```false```
+
 ### query
 
 Each configuration option that starts with ```query``` is identified as a query that should be analyzed.
