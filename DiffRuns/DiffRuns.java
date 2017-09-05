@@ -176,36 +176,13 @@ public class DiffRuns
             StringBuilder sb = new StringBuilder();
 
             Integer o1pc = origData.get(TYPE_1PC) != null ? origData.get(TYPE_1PC).get(count) : Integer.valueOf(0);
-            if (o1pc == null)
-               o1pc = Integer.valueOf(0);
-
             Integer o1pcp = origData.get(TYPE_1PCP) != null ? origData.get(TYPE_1PCP).get(count) : Integer.valueOf(0);
-            if (o1pcp == null)
-               o1pcp = Integer.valueOf(0);
-
             Integer o2pc = origData.get(TYPE_2PC) != null ? origData.get(TYPE_2PC).get(count) : Integer.valueOf(0);
-            if (o2pc == null)
-               o2pc = Integer.valueOf(0);
-
             Integer oro = origData.get(TYPE_RO) != null ? origData.get(TYPE_RO).get(count) : Integer.valueOf(0);
-            if (oro == null)
-               oro = Integer.valueOf(0);
-
             Integer p1pc = patchData.get(TYPE_1PC) != null ? patchData.get(TYPE_1PC).get(count) : Integer.valueOf(0);
-            if (p1pc == null)
-               p1pc = Integer.valueOf(0);
-
             Integer p1pcp = patchData.get(TYPE_1PCP) != null ? patchData.get(TYPE_1PCP).get(count) : Integer.valueOf(0);
-            if (p1pcp == null)
-               p1pcp = Integer.valueOf(0);
-
             Integer p2pc = patchData.get(TYPE_2PC) != null ? patchData.get(TYPE_2PC).get(count) : Integer.valueOf(0);
-            if (p2pc == null)
-               p2pc = Integer.valueOf(0);
-
             Integer pro = patchData.get(TYPE_RO) != null ? patchData.get(TYPE_RO).get(count) : Integer.valueOf(0);
-            if (pro == null)
-               pro = Integer.valueOf(0);
 
             sb.append(count);
             sb.append(",");
@@ -245,9 +222,10 @@ public class DiffRuns
       }
 
       l.add("");
-      l.add("Master: " + origCommit);
+      l.add("M: " + origCommit);
+      l.add("P: " + patchCommit);
       
-      writeFile(Paths.get("report", patchCommit + ".csv"), l);
+      writeFile(Paths.get("report", origCommit + "-" + patchCommit + ".csv"), l);
    }
 
    /**
