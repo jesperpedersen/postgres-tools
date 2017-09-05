@@ -33,9 +33,14 @@ TIME=180
 PGSQL_ROOT=/opt/postgresql-11.x
 PGSQL_DATA=/mnt/data/11.x
 PGSQL_XLOG=/mnt/xlog/11.x
+COMPILE=1
 COMPILE_OPTIONS="--with-openssl --with-gssapi --enable-debug --enable-depend"
 COMPILE_JOBS=60
 CONFIGURATION=/home/postgres/Configuration/11.x
+PROFILE_OFF_LOGGED=1
+PROFILE_OFF_UNLOGGED=1
+PROFILE_ON_LOGGED=1
+PROFILE_ON_UNLOGGED=1
 RUN_ONEPC=1
 RUN_ONEPCP=1
 RUN_RO=1
@@ -162,145 +167,163 @@ function pgbench_2pc_standard()
 }
 
 postgresql_stop
-postgresql_compile
+
+# Compile
+if [ $COMPILE == 1 ]; then
+    postgresql_compile
+else
+    if [ -z "$1" ]; then
+        HEAD=unknown
+    else
+        HEAD=$1
+    fi
+fi
 
 # Off / Logged
-if [ $RUN_ONEPC == 1 ]; then
-    postgresql_configuration
-    postgresql_start
-    pgbench_init_logged
-    pgbench_1pc_standard "off" "logged"
-fi
+if [ $PROFILE_OFF_LOGGED == 1 ]; then
+    if [ $RUN_ONEPC == 1 ]; then
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_logged
+        pgbench_1pc_standard "off" "logged"
+    fi
 
-if [ $RUN_ONEPCP == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_start
-    pgbench_init_logged
-    pgbench_1pc_prepared "off" "logged"
-fi
+    if [ $RUN_ONEPCP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_logged
+        pgbench_1pc_prepared "off" "logged"
+    fi
 
-if [ $RUN_RO == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_start
-    pgbench_init_logged
-    pgbench_readonly "off" "logged"
-fi
+    if [ $RUN_RO == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_logged
+        pgbench_readonly "off" "logged"
+    fi
 
-if [ $RUN_TWOPC == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_start
-    pgbench_init_logged
-    pgbench_2pc_standard "off" "logged"
+    if [ $RUN_TWOPC == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_logged
+        pgbench_2pc_standard "off" "logged"
+    fi
 fi
 
 # Off / Unlogged
-if [ $RUN_ONEPC == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_start
-    pgbench_init_unlogged
-    pgbench_1pc_standard "off" "unlogged"
-fi
+if [ $PROFILE_OFF_UNLOGGED == 1 ]; then
+    if [ $RUN_ONEPC == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_1pc_standard "off" "unlogged"
+    fi
 
-if [ $RUN_ONEPCP == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_start
-    pgbench_init_unlogged
-    pgbench_1pc_prepared "off" "unlogged"
-fi
+    if [ $RUN_ONEPCP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_1pc_prepared "off" "unlogged"
+    fi
 
-if [ $RUN_RO == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_start
-    pgbench_init_unlogged
-    pgbench_readonly "off" "unlogged"
-fi
+    if [ $RUN_RO == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_readonly "off" "unlogged"
+    fi
 
-if [ $RUN_TWOPC == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_start
-    pgbench_init_unlogged
-    pgbench_2pc_standard "off" "unlogged"
+    if [ $RUN_TWOPC == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_2pc_standard "off" "unlogged"
+    fi
 fi
 
 # On / Logged
-if [ $RUN_ONEPC == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_synchronous_commit
-    postgresql_start
-    pgbench_init_logged
-    pgbench_1pc_standard "on" "logged"
-fi
+if [ $PROFILE_ON_LOGGED == 1 ]; then
+    if [ $RUN_ONEPC == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_logged
+        pgbench_1pc_standard "on" "logged"
+    fi
 
-if [ $RUN_ONEPCP == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_synchronous_commit
-    postgresql_start
-    pgbench_init_logged
-    pgbench_1pc_prepared "on" "logged"
-fi
+    if [ $RUN_ONEPCP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_logged
+        pgbench_1pc_prepared "on" "logged"
+    fi
 
-if [ $RUN_RO == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_synchronous_commit
-    postgresql_start
-    pgbench_init_logged
-    pgbench_readonly "on" "logged"
-fi
+    if [ $RUN_RO == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_logged
+        pgbench_readonly "on" "logged"
+    fi
 
-if [ $RUN_TWOPC == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_synchronous_commit
-    postgresql_start
-    pgbench_init_logged
-    pgbench_2pc_standard "on" "logged"
+    if [ $RUN_TWOPC == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_logged
+        pgbench_2pc_standard "on" "logged"
+    fi
 fi
 
 # On / Unlogged
-if [ $RUN_ONEPC == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_synchronous_commit
-    postgresql_start
-    pgbench_init_unlogged
-    pgbench_1pc_standard "on" "unlogged"
-fi
+if [ $PROFILE_ON_UNLOGGED == 1 ]; then
+    if [ $RUN_ONEPC == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_1pc_standard "on" "unlogged"
+    fi
 
-if [ $RUN_ONEPCP == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_synchronous_commit
-    postgresql_start
-    pgbench_init_unlogged
-    pgbench_1pc_prepared "on" "unlogged"
-fi
+    if [ $RUN_ONEPCP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_1pc_prepared "on" "unlogged"
+    fi
 
-if [ $RUN_RO == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_synchronous_commit
-    postgresql_start
-    pgbench_init_unlogged
-    pgbench_readonly "on" "unlogged"
-fi
+    if [ $RUN_RO == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_readonly "on" "unlogged"
+    fi
 
-if [ $RUN_TWOPC == 1 ]; then
-    postgresql_stop
-    postgresql_configuration
-    postgresql_synchronous_commit
-    postgresql_start
-    pgbench_init_unlogged
-    pgbench_2pc_standard "on" "unlogged"
+    if [ $RUN_TWOPC == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_2pc_standard "on" "unlogged"
+    fi
 fi
 
 # PostgreSQL configuration
