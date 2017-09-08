@@ -24,7 +24,7 @@
 
 SECONDS=0
 DATE=`date +"%Y%m%d"`
-CLIENTS="1 10 25 50 75 100 125 150 175 200"
+CLIENTS="1 10 25 50 75 100 125 150 175 200 250 300 350 375"
 TCP=0
 HOST=localhost
 PORT=5432
@@ -45,6 +45,7 @@ RUN_ONEPC=1
 RUN_ONEPCP=1
 RUN_RO=1
 RUN_TWOPC=1
+RUN_SSUP=0
 
 function postgresql_start()
 {
@@ -166,6 +167,21 @@ function pgbench_2pc_standard()
     done
 }
 
+function pgbench_skipsomeupdates_prepared()
+{
+    local FILE=$DATE-$HEAD-$1-$2-ssu-prepared.txt
+    touch $FILE
+    for i in $CLIENTS; do
+        echo "DATA "$i >> $FILE
+        if [ "$TCP" = "1" ]; then
+            $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -M prepared -N -T $TIME -U postgres pgbench >> $FILE
+        else
+            $PGSQL_ROOT/bin/pgbench -c $i -j $i -M prepared -N -T $TIME -U postgres pgbench >> $FILE
+        fi
+        echo "" >> $FILE
+    done
+}
+
 postgresql_stop
 
 # Compile
@@ -211,6 +227,14 @@ if [ $PROFILE_OFF_LOGGED == 1 ]; then
         pgbench_init_logged
         pgbench_2pc_standard "off" "logged"
     fi
+
+    if [ $RUN_SSUP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_logged
+        pgbench_skipsomeupdates_prepared "off" "logged"
+    fi
 fi
 
 # Off / Unlogged
@@ -245,6 +269,14 @@ if [ $PROFILE_OFF_UNLOGGED == 1 ]; then
         postgresql_start
         pgbench_init_unlogged
         pgbench_2pc_standard "off" "unlogged"
+    fi
+
+    if [ $RUN_SSUP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_skipsomeupdates_prepared "off" "unlogged"
     fi
 fi
 
@@ -285,6 +317,15 @@ if [ $PROFILE_ON_LOGGED == 1 ]; then
         pgbench_init_logged
         pgbench_2pc_standard "on" "logged"
     fi
+
+    if [ $RUN_SSUP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_logged
+        pgbench_skipsomeupdates_prepared "on" "logged"
+    fi
 fi
 
 # On / Unlogged
@@ -323,6 +364,15 @@ if [ $PROFILE_ON_UNLOGGED == 1 ]; then
         postgresql_start
         pgbench_init_unlogged
         pgbench_2pc_standard "on" "unlogged"
+    fi
+
+    if [ $RUN_SSUP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_skipsomeupdates_prepared "on" "unlogged"
     fi
 fi
 

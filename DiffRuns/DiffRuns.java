@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2016 Jesper Pedersen <jesper.pedersen@comcast.net>
+ * Copyright (c) 2017 Jesper Pedersen <jesper.pedersen@comcast.net>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -55,6 +55,7 @@ public class DiffRuns
    private static final String TYPE_1PCP = "1pcp";
    private static final String TYPE_2PC = "2pc";
    private static final String TYPE_RO = "ro";
+   private static final String TYPE_SSUP = "ssup";
 
    // Profile configurations
    private static final String PROFILE_OFF_LOGGED = "off-logged";
@@ -169,20 +170,42 @@ public class DiffRuns
             continue;
          
          l.add(profile);
-         l.add("Count,M1PC,M1PCP,M2PC,MRO,P1PC,P1PCP,P2PC,PRO,1PC%,1PCP%,2PC%,RO%");
+         l.add("Count,M1PC,M1PCP,M2PC,MSSUP,MRO,P1PC,P1PCP,P2PC,PSSUP,PRO,1PC%,1PCP%,2PC%,SSUP%,RO%");
             
          for (Integer count : POINTS)
          {
             StringBuilder sb = new StringBuilder();
 
             Integer o1pc = origData.get(TYPE_1PC) != null ? origData.get(TYPE_1PC).get(count) : Integer.valueOf(0);
+            if (o1pc == null)
+               o1pc = Integer.valueOf(0);
             Integer o1pcp = origData.get(TYPE_1PCP) != null ? origData.get(TYPE_1PCP).get(count) : Integer.valueOf(0);
+            if (o1pcp == null)
+               o1pcp = Integer.valueOf(0);
             Integer o2pc = origData.get(TYPE_2PC) != null ? origData.get(TYPE_2PC).get(count) : Integer.valueOf(0);
+            if (o2pc == null)
+               o2pc = Integer.valueOf(0);
+            Integer ossup = origData.get(TYPE_SSUP) != null ? origData.get(TYPE_SSUP).get(count) : Integer.valueOf(0);
+            if (ossup == null)
+               ossup = Integer.valueOf(0);
             Integer oro = origData.get(TYPE_RO) != null ? origData.get(TYPE_RO).get(count) : Integer.valueOf(0);
+            if (oro == null)
+               oro = Integer.valueOf(0);
             Integer p1pc = patchData.get(TYPE_1PC) != null ? patchData.get(TYPE_1PC).get(count) : Integer.valueOf(0);
+            if (p1pc == null)
+               p1pc = Integer.valueOf(0);
             Integer p1pcp = patchData.get(TYPE_1PCP) != null ? patchData.get(TYPE_1PCP).get(count) : Integer.valueOf(0);
+            if (p1pcp == null)
+               p1pcp = Integer.valueOf(0);
             Integer p2pc = patchData.get(TYPE_2PC) != null ? patchData.get(TYPE_2PC).get(count) : Integer.valueOf(0);
+            if (p2pc == null)
+               p2pc = Integer.valueOf(0);
+            Integer pssup = patchData.get(TYPE_SSUP) != null ? patchData.get(TYPE_SSUP).get(count) : Integer.valueOf(0);
+            if (pssup == null)
+               pssup = Integer.valueOf(0);
             Integer pro = patchData.get(TYPE_RO) != null ? patchData.get(TYPE_RO).get(count) : Integer.valueOf(0);
+            if (pro == null)
+               pro = Integer.valueOf(0);
 
             sb.append(count);
             sb.append(",");
@@ -192,6 +215,8 @@ public class DiffRuns
             sb.append(",");
             sb.append(o2pc);
             sb.append(",");
+            sb.append(ossup);
+            sb.append(",");
             sb.append(oro);
             sb.append(",");
             sb.append(p1pc);
@@ -200,22 +225,27 @@ public class DiffRuns
             sb.append(",");
             sb.append(p2pc);
             sb.append(",");
+            sb.append(pssup);
+            sb.append(",");
             sb.append(pro);
             sb.append(",");
 
             //
             int line = l.size() + 1;
             if (o1pc.intValue() != 0 && p1pc.intValue() != 0)
-               sb.append("=((F").append(line).append("-B").append(line).append(")/B").append(line).append(")*100");
+               sb.append("=((G").append(line).append("-B").append(line).append(")/B").append(line).append(")*100");
             sb.append(",");
             if (o1pcp.intValue() != 0 && p1pcp.intValue() != 0)
-               sb.append("=((G").append(line).append("-C").append(line).append(")/C").append(line).append(")*100");
+               sb.append("=((H").append(line).append("-C").append(line).append(")/C").append(line).append(")*100");
             sb.append(",");
             if (o2pc.intValue() != 0 && p2pc.intValue() != 0)
-               sb.append("=((H").append(line).append("-D").append(line).append(")/D").append(line).append(")*100");
+               sb.append("=((I").append(line).append("-D").append(line).append(")/D").append(line).append(")*100");
+            sb.append(",");
+            if (ossup.intValue() != 0 && pssup.intValue() != 0)
+               sb.append("=((J").append(line).append("-E").append(line).append(")/E").append(line).append(")*100");
             sb.append(",");
             if (oro.intValue() != 0 && pro.intValue() != 0)
-               sb.append("=((I").append(line).append("-E").append(line).append(")/E").append(line).append(")*100");
+               sb.append("=((K").append(line).append("-F").append(line).append(")/F").append(line).append(")*100");
             
             l.add(sb.toString());
          }
@@ -324,6 +354,13 @@ public class DiffRuns
                   String profile = getProfile(f);
                
                   getTypeMap(commit, profile).put(TYPE_2PC, data);
+               }
+               else if (f.getName().endsWith("ssu-prepared.txt"))
+               {
+                  Map<Integer, Integer> data = getData(lines);
+                  String profile = getProfile(f);
+               
+                  getTypeMap(commit, profile).put(TYPE_SSUP, data);
                }
                else if (f.getName().endsWith("-readonly.txt"))
                {
