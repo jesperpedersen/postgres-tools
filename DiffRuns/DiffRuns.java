@@ -55,6 +55,7 @@ public class DiffRuns
    private static final String TYPE_1PCP = "1pcp";
    private static final String TYPE_2PC = "2pc";
    private static final String TYPE_RO = "ro";
+   private static final String TYPE_ROP = "rop";
    private static final String TYPE_SSUP = "ssup";
 
    // Profile configurations
@@ -170,7 +171,7 @@ public class DiffRuns
             continue;
          
          l.add(profile);
-         l.add("Count,M1PC,M1PCP,M2PC,MSSUP,MRO,P1PC,P1PCP,P2PC,PSSUP,PRO,1PC%,1PCP%,2PC%,SSUP%,RO%");
+         l.add("Count,M1PC,M1PCP,M2PC,MSSUP,MRO,MROP,P1PC,P1PCP,P2PC,PSSUP,PRO,PROP,1PC%,1PCP%,2PC%,SSUP%,RO%,ROP%");
             
          for (Integer count : POINTS)
          {
@@ -191,6 +192,9 @@ public class DiffRuns
             Integer oro = origData.get(TYPE_RO) != null ? origData.get(TYPE_RO).get(count) : Integer.valueOf(0);
             if (oro == null)
                oro = Integer.valueOf(0);
+            Integer orop = origData.get(TYPE_ROP) != null ? origData.get(TYPE_ROP).get(count) : Integer.valueOf(0);
+            if (orop == null)
+               orop = Integer.valueOf(0);
             Integer p1pc = patchData.get(TYPE_1PC) != null ? patchData.get(TYPE_1PC).get(count) : Integer.valueOf(0);
             if (p1pc == null)
                p1pc = Integer.valueOf(0);
@@ -206,6 +210,9 @@ public class DiffRuns
             Integer pro = patchData.get(TYPE_RO) != null ? patchData.get(TYPE_RO).get(count) : Integer.valueOf(0);
             if (pro == null)
                pro = Integer.valueOf(0);
+            Integer prop = patchData.get(TYPE_ROP) != null ? patchData.get(TYPE_ROP).get(count) : Integer.valueOf(0);
+            if (prop == null)
+               prop = Integer.valueOf(0);
 
             sb.append(count);
             sb.append(",");
@@ -219,6 +226,8 @@ public class DiffRuns
             sb.append(",");
             sb.append(oro);
             sb.append(",");
+            sb.append(orop);
+            sb.append(",");
             sb.append(p1pc);
             sb.append(",");
             sb.append(p1pcp);
@@ -229,23 +238,28 @@ public class DiffRuns
             sb.append(",");
             sb.append(pro);
             sb.append(",");
+            sb.append(prop);
+            sb.append(",");
 
             //
             int line = l.size() + 1;
             if (o1pc.intValue() != 0 && p1pc.intValue() != 0)
-               sb.append("=((G").append(line).append("-B").append(line).append(")/B").append(line).append(")*100");
+               sb.append("=((H").append(line).append("-B").append(line).append(")/B").append(line).append(")*100");
             sb.append(",");
             if (o1pcp.intValue() != 0 && p1pcp.intValue() != 0)
-               sb.append("=((H").append(line).append("-C").append(line).append(")/C").append(line).append(")*100");
+               sb.append("=((I").append(line).append("-C").append(line).append(")/C").append(line).append(")*100");
             sb.append(",");
             if (o2pc.intValue() != 0 && p2pc.intValue() != 0)
-               sb.append("=((I").append(line).append("-D").append(line).append(")/D").append(line).append(")*100");
+               sb.append("=((J").append(line).append("-D").append(line).append(")/D").append(line).append(")*100");
             sb.append(",");
             if (ossup.intValue() != 0 && pssup.intValue() != 0)
-               sb.append("=((J").append(line).append("-E").append(line).append(")/E").append(line).append(")*100");
+               sb.append("=((K").append(line).append("-E").append(line).append(")/E").append(line).append(")*100");
             sb.append(",");
             if (oro.intValue() != 0 && pro.intValue() != 0)
-               sb.append("=((K").append(line).append("-F").append(line).append(")/F").append(line).append(")*100");
+               sb.append("=((L").append(line).append("-F").append(line).append(")/F").append(line).append(")*100");
+            sb.append(",");
+            if (orop.intValue() != 0 && prop.intValue() != 0)
+               sb.append("=((M").append(line).append("-G").append(line).append(")/G").append(line).append(")*100");
             
             l.add(sb.toString());
          }
@@ -368,6 +382,13 @@ public class DiffRuns
                   String profile = getProfile(f);
                
                   getTypeMap(commit, profile).put(TYPE_RO, data);
+               }
+               else if (f.getName().endsWith("-readonly-prepared.txt"))
+               {
+                  Map<Integer, Integer> data = getData(lines);
+                  String profile = getProfile(f);
+               
+                  getTypeMap(commit, profile).put(TYPE_ROP, data);
                }
                else if (f.getName().endsWith("-environment.txt"))
                {

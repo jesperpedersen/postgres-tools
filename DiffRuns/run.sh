@@ -44,6 +44,7 @@ PROFILE_ON_UNLOGGED=1
 RUN_ONEPC=1
 RUN_ONEPCP=1
 RUN_RO=1
+RUN_ROP=0
 RUN_TWOPC=1
 RUN_SSUP=0
 
@@ -137,7 +138,7 @@ function pgbench_1pc_prepared()
     done
 }
 
-function pgbench_readonly()
+function pgbench_readonly_standard()
 {
     local FILE=$DATE-$HEAD-$1-$2-readonly.txt
     touch $FILE
@@ -147,6 +148,21 @@ function pgbench_readonly()
             $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -S -T $TIME -U postgres pgbench >> $FILE
         else
             $PGSQL_ROOT/bin/pgbench -c $i -j $i -S -T $TIME -U postgres pgbench >> $FILE
+        fi
+        echo "" >> $FILE
+    done
+}
+
+function pgbench_readonly_prepared()
+{
+    local FILE=$DATE-$HEAD-$1-$2-readonly-prepared.txt
+    touch $FILE
+    for i in $CLIENTS; do
+        echo "DATA "$i >> $FILE
+        if [ "$TCP" = "1" ]; then
+            $PGSQL_ROOT/bin/pgbench -h $HOST -p $PORT -c $i -j $i -M prepared -S -T $TIME -U postgres pgbench >> $FILE
+        else
+            $PGSQL_ROOT/bin/pgbench -c $i -j $i -M prepared -S -T $TIME -U postgres pgbench >> $FILE
         fi
         echo "" >> $FILE
     done
@@ -217,7 +233,15 @@ if [ $PROFILE_OFF_LOGGED == 1 ]; then
         postgresql_configuration
         postgresql_start
         pgbench_init_logged
-        pgbench_readonly "off" "logged"
+        pgbench_readonly_standard "off" "logged"
+    fi
+
+    if [ $RUN_ROP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_logged
+        pgbench_readonly_prepared "off" "logged"
     fi
 
     if [ $RUN_TWOPC == 1 ]; then
@@ -260,7 +284,15 @@ if [ $PROFILE_OFF_UNLOGGED == 1 ]; then
         postgresql_configuration
         postgresql_start
         pgbench_init_unlogged
-        pgbench_readonly "off" "unlogged"
+        pgbench_readonly_standard "off" "unlogged"
+    fi
+
+    if [ $RUN_ROP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_readonly_prepared "off" "unlogged"
     fi
 
     if [ $RUN_TWOPC == 1 ]; then
@@ -306,7 +338,16 @@ if [ $PROFILE_ON_LOGGED == 1 ]; then
         postgresql_synchronous_commit
         postgresql_start
         pgbench_init_logged
-        pgbench_readonly "on" "logged"
+        pgbench_readonly_standard "on" "logged"
+    fi
+
+    if [ $RUN_ROP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_logged
+        pgbench_readonly_prepared "on" "logged"
     fi
 
     if [ $RUN_TWOPC == 1 ]; then
@@ -354,7 +395,16 @@ if [ $PROFILE_ON_UNLOGGED == 1 ]; then
         postgresql_synchronous_commit
         postgresql_start
         pgbench_init_unlogged
-        pgbench_readonly "on" "unlogged"
+        pgbench_readonly_standard "on" "unlogged"
+    fi
+
+    if [ $RUN_ROP == 1 ]; then
+        postgresql_stop
+        postgresql_configuration
+        postgresql_synchronous_commit
+        postgresql_start
+        pgbench_init_unlogged
+        pgbench_readonly_prepared "on" "unlogged"
     fi
 
     if [ $RUN_TWOPC == 1 ]; then
