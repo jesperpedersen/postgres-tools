@@ -755,7 +755,7 @@ public class LogAnalyzer
          l.add("");
          l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
          l.add("<head>");
-         l.add("  <title>Log Analysis</title>");
+         l.add("  <title>Log Analysis: " + processId + "</title>");
          l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
          l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
          l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
