@@ -34,12 +34,16 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 
+import java.text.SimpleDateFormat;
+
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -132,6 +136,9 @@ public class CronRun
 
    //                   Date=Note
    private static final Properties ignores = new Properties();
+
+   // Date format
+   private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
 
    /**
     * Get the date from the file name
@@ -590,6 +597,8 @@ public class CronRun
    private static void writeDaily() throws Exception
    {
       List<String> l = new ArrayList<>();
+      TreeSet<Integer> years = new TreeSet<>();
+      TreeMap<Integer, TreeMap<Integer, List<Integer>>> calData = new TreeMap<>();
 
       l.add("<html>");
       l.add(" <head>");
@@ -604,40 +613,46 @@ public class CronRun
       l.add("  <ul>");
       for (String date : masterMap.keySet())
       {
+         Integer year = Integer.valueOf(date.substring(0, 4));
+         Integer month = Integer.valueOf(date.substring(4, 6));
+         Integer day = Integer.valueOf(date.substring(6));
+
+         years.add(year);
+
+         TreeMap<Integer, List<Integer>> yearM = calData.get(year);
+         if (yearM == null)
+            yearM = new TreeMap<>();
+
+         List<Integer> days = yearM.get(month);
+         if (days == null)
+            days = new ArrayList<>();
+
+         days.add(day);
+         yearM.put(month, days);
+         calData.put(year, yearM);
+      }
+
+      for (Integer year : calData.keySet())
+      {
          StringBuilder sb = new StringBuilder();
-         sb.append("    <li><a href=\"postgresql-");
-         sb.append(date);
+         sb.append("<a href=\"daily-");
+         sb.append(Integer.toString(year));
          sb.append(".html\">");
-         sb.append(date);
+         sb.append(year);
          sb.append("</a>");
 
-         Integer change = changes.get(date);
-         if (change.intValue() == 1)
-         {
-            sb.append(" (Configuration)");
-         }
-         else if (change.intValue() == 2)
-         {
-            sb.append(" (Environment)");
-         }
-         else if (change.intValue() == 3)
-         {
-            sb.append(" (Both)");
-         }
-         else if (change.intValue() == 4)
-         {
-            sb.append(" (Note)");
-         }
-         else if (change.intValue() == 5)
-         {
-            sb.append(" (Ignore)");
-         }
-         
-         sb.append("</li>");
-         
+         writeDailyYear(year, calData.get(year));
+
+         l.add("<li>");
          l.add(sb.toString());
+         l.add("</li>");
       }
       l.add("  </ul>");
+
+      l.add("<p>");
+
+      l.addAll(getCalendarData(calData.lastKey(), calData.get(calData.lastKey())));
+
       l.add("  <a href=\"index.html\">Back</a>");
 
       l.addAll(readFooter());
@@ -646,6 +661,179 @@ public class CronRun
       l.add("</html>");
 
       writeFile(Paths.get("report", "daily.html"), l);
+   }
+
+   /**
+    * Write a daily report for a specific year
+    * @param year The year
+    * @param tm The data for the year
+    */
+   private static void writeDailyYear(int year, TreeMap<Integer, List<Integer>> tm) throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      l.add("<html>");
+      l.add(" <head>");
+      l.add("  <title>PostgreSQL Performance - Daily Reports " + year + "</title>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
+      l.add(" </head>");
+      l.add(" <body>");
+      l.add("  <h1>Daily Reports: " + year + "</h1>");
+      l.add("");
+      l.add("  <a href=\"daily.html\">Back</a>");
+
+      l.addAll(getCalendarData(year, tm));
+
+      l.add("  <a href=\"daily.html\">Back</a>");
+
+      l.addAll(readFooter());
+
+      l.add(" </body>");
+      l.add("</html>");
+
+      writeFile(Paths.get("report", "daily-" + year + ".html"), l);
+   }
+
+   /**
+    * Get the description of the year
+    * @param year The year
+    * @param tm The data for the year
+    * @return The description as strings
+    */
+   private static List<String> getCalendarData(int year, TreeMap<Integer, List<Integer>> tm) throws Exception
+   {
+      List<String> l = new ArrayList<>();
+      Calendar calendar = Calendar.getInstance(Locale.US);
+
+      calendar.set(Calendar.YEAR, year);
+
+      l.add("<h3>");
+      l.add(Integer.toString(year));
+      l.add("</h3>");
+
+      for (int month = 0; month < 12; month++)
+      {
+         calendar.set(Calendar.MONTH, month);
+         calendar.set(Calendar.DATE, 1);
+
+         List<Integer> days = tm.get(month + 1);
+
+         l.add("<u><b>");
+         l.add(calendar.getDisplayName(Calendar.MONTH, Calendar.LONG_FORMAT, Locale.US));
+         l.add("</b></u>");
+         l.add("<p>");
+
+         l.add("<table style=\"text-align: center\">");
+         l.add("<tr>");
+         l.add("<th>Monday</th>");
+         l.add("<th>Tuesday</th>");
+         l.add("<th>Wednesday</th>");
+         l.add("<th>Thursday</th>");
+         l.add("<th>Friday</th>");
+         l.add("<th>Saturday</th>");
+         l.add("<th>Sunday</th>");
+         l.add("</tr>");
+
+         calendar.set(Calendar.DATE, 1);
+
+         int firstDay = calendar.get(Calendar.DAY_OF_WEEK);
+         int offset = 0;
+         switch (firstDay)
+         {
+            case Calendar.MONDAY:
+               offset = 0;
+               break;
+            case Calendar.TUESDAY:
+               offset = 1;
+               break;
+            case Calendar.WEDNESDAY:
+               offset = 2;
+               break;
+            case Calendar.THURSDAY:
+               offset = 3;
+               break;
+            case Calendar.FRIDAY:
+               offset = 4;
+               break;
+            case Calendar.SATURDAY:
+               offset = 5;
+               break;
+            case Calendar.SUNDAY:
+               offset = 6;
+               break;
+            default:
+               break;
+         }
+
+         l.add("<tr>");
+
+         for (int i = 0; i < offset; i++)
+         {
+            l.add("<td></td>");
+         }
+
+         int toDate = calendar.getActualMaximum(Calendar.DAY_OF_MONTH);
+         for (int day = 1; day <= toDate; day++)
+         {
+            calendar.set(Calendar.DATE, day);
+
+            String background = "white";
+
+            Integer change = changes.get(sdf.format(calendar.getTime()));
+            if (change != null)
+            {
+               if (change.intValue() == 1)
+               {
+                  background = "green";
+               }
+               else if (change.intValue() == 2)
+               {
+                  background = "red";
+               }
+               else if (change.intValue() == 3)
+               {
+                  background = "blue";
+               }
+               else if (change.intValue() == 4)
+               {
+                  background = "yellow";
+               }
+               else if (change.intValue() == 5)
+               {
+                  background = "black";
+               }
+            }
+
+            if (days != null && days.contains(day))
+            {
+               StringBuilder sb = new StringBuilder();
+               sb.append("<a href=\"postgresql-");
+               sb.append(sdf.format(calendar.getTime()));
+               sb.append(".html\">");
+               sb.append(day);
+               sb.append("</a>");
+
+               l.add("<td style=\"background-color: " + background + "\">" + sb.toString() + "</td>");
+            }
+            else
+            {
+               l.add("<td style=\"background-color: " + background + "\">" + day + "</td>");
+            }
+
+            if (calendar.get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY)
+            {
+               l.add("</tr>");
+               l.add("<tr>");
+            }
+         }
+
+         l.add("</tr>");
+         l.add("</table>");
+         l.add("<p>");
+      }
+
+      return l;
    }
 
    /**
