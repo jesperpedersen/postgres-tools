@@ -1287,6 +1287,23 @@ public class QueryAnalyzer
                   result.add("<td>" + indexName.toString() + "</td>");
                   result.add("<td>" + newIndex + "</td>");
 
+                  if (newIndex.size() > 1)
+                  {
+                     result.add("<td>btree</td>");
+                  }
+                  else
+                  {
+                     Integer type = tables.get(tableName).get(newIndex.get(0));
+                     if (type == Types.CHAR || type == Types.LONGVARCHAR || type == Types.VARCHAR)
+                     {
+                        result.add("<td>hash</td>");
+                     }
+                     else
+                     {
+                        result.add("<td>btree</td>");
+                     }
+                  }
+
                   if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
                   {
                      StringBuilder sb = new StringBuilder();
