@@ -111,6 +111,9 @@ public class QueryAnalyzer
    /** Aliases:       Alias   Name */
    private static Map<String, String> aliases = new TreeMap<>();
 
+   /** Plans:         Query   Plan */
+   private static Map<String, String> plans = new TreeMap<>();
+
    /** Planner time:  Query   Time */
    private static Map<String, Double> plannerTimes = new TreeMap<>();
 
@@ -225,14 +228,17 @@ public class QueryAnalyzer
       l.add("<p>");
       
       l.add("<h2>Queries</h2>");
-      l.add("<ul>");
+      l.add("<table>");
       for (String q : queryIds)
       {
-         l.add("<li><a href=\"" + q + ".html\">" + q +"</a>" +
-               (plannerTimes.get(q) != null ? " (" + plannerTimes.get(q) + "ms / " + executorTimes.get(q) + "ms)" : "") +
-               "</li>");
+         l.add("<tr>");
+         l.add("<td><a href=\"" + q + ".html\">" + q +"</a></td>");
+         l.add("<td>" + (plannerTimes.get(q) != null ? plannerTimes.get(q) + "ms" : "") + "</td>");
+         l.add("<td>" + (plannerTimes.get(q) != null ? executorTimes.get(q) + "ms" : "") + "</td>");
+         l.add("<td>" + (plans.get(q) != null ? plans.get(q) : "") + "</td>");
+         l.add("</tr>");
       }
-      l.add("</ul>");
+      l.add("</table>");
       
       l.add("</body>");
       l.add("</html>");
@@ -1050,6 +1056,94 @@ public class QueryAnalyzer
                else
                {
                   l = executeStatement(c, EXPLAIN_VERBOSE + " " + query);
+               }
+
+               if (statement instanceof Select)
+               {
+                  StringBuilder sb = new StringBuilder();
+
+                  String firstLine = l.get(0);
+                  if (firstLine.indexOf("using") != -1)
+                  {
+                     sb.append(firstLine.substring(0, firstLine.indexOf("using")).trim());
+                  }
+                  else if (firstLine.indexOf("on") != -1)
+                  {
+                     sb.append(firstLine.substring(0, firstLine.indexOf("on")).trim());
+                  }
+                  else
+                  {
+                     sb.append(firstLine.substring(0, firstLine.indexOf("  (")).trim());
+                  }
+
+                  for (int i = 1; i < l.size(); i++)
+                  {
+                     String line = l.get(i);
+                     if (line.indexOf("->") != -1)
+                     {
+                        if (line.indexOf("using") != -1)
+                        {
+                           sb.append(" | ");
+                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("using")).trim());
+                        }
+                        else if (line.indexOf("on") != -1)
+                        {
+                           sb.append(" | ");
+                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("on")).trim());
+                        }
+                        else
+                        {
+                           sb.append(" | ");
+                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("  (")).trim());
+                        }
+                     }
+                  }
+
+                  plans.put(key, sb.toString());
+               }
+               else if (statement instanceof Delete)
+               {
+                  StringBuilder sb = new StringBuilder();
+
+                  for (int i = 1; i < l.size(); i++)
+                  {
+                     String line = l.get(i);
+                     if (line.indexOf("->") != -1)
+                     {
+                        if (line.indexOf("using") != -1)
+                        {
+                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("using")).trim());
+                        }
+                        else if (line.indexOf("on") != -1)
+                        {
+                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("on")).trim());
+                        }
+                     }
+                  }
+
+                  plans.put(key, sb.toString());
+               }
+               else if (statement instanceof Update)
+               {
+                  StringBuilder sb = new StringBuilder();
+
+                  for (int i = 1; i < l.size(); i++)
+                  {
+                     String line = l.get(i);
+                     if (line.indexOf("->") != -1)
+                     {
+                        if (line.indexOf("using") != -1)
+                        {
+                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("using")).trim());
+                        }
+                        else if (line.indexOf("on") != -1)
+                        {
+                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("on")).trim());
+                        }
+                     }
+                  }
+
+                  plans.put(key, sb.toString());
                }
 
                for (String s : l)
