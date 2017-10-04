@@ -978,9 +978,21 @@ public class QueryAnalyzer
       l.add("<table>");
       for (Map.Entry<String, List<String>> entry : usedIndexes.entrySet())
       {
+         String table = "";
+         for (Map.Entry<String, Map<String, List<String>>> ientry : indexes.entrySet())
+         {
+            if (ientry.getValue().keySet().contains(entry.getKey()))
+            {
+               table = ientry.getKey();
+            }
+         }
+
          l.add("<tr>");
          l.add("<td>");
          l.add(entry.getKey());
+         l.add("</td>");
+         l.add("<td>");
+         l.add(table);
          l.add("</td>");
          l.add("<td>");
          l.add(entry.getValue().toString());
@@ -1002,9 +1014,21 @@ public class QueryAnalyzer
          l.add("<table>");
          for (String unused : unusedIndexes)
          {
+            String table = "";
+            for (Map.Entry<String, Map<String, List<String>>> entry : indexes.entrySet())
+            {
+               if (entry.getValue().keySet().contains(unused))
+               {
+                  table = entry.getKey();
+               }
+            }
+
             l.add("<tr>");
             l.add("<td>");
             l.add(unused);
+            l.add("</td>");
+            l.add("<td>");
+            l.add(table);
             l.add("</td>");
             l.add("</tr>");
          }
