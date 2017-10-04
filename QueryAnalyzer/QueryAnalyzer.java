@@ -129,6 +129,9 @@ public class QueryAnalyzer
    /** Indexes:       Table       Index   Columns */
    private static Map<String, Map<String, List<String>>> indexes = new TreeMap<>();
    
+   /** Used indexes   Index        Query */
+   private static Map<String, List<String>> usedIndexes = new TreeMap<>();
+
    /** Primary key:   Table   Columns */
    private static Map<String, List<String>> primaryKeys = new TreeMap<>();
 
@@ -224,6 +227,7 @@ public class QueryAnalyzer
       l.add("<li><a href=\"tables.html\">Tables</a></li>");
       l.add("<li><a href=\"result.csv\">Times</a></li>");
       l.add("<li><a href=\"hot.html\">HOT</a></li>");
+      l.add("<li><a href=\"indexes.html\">Indexes</a></li>");
       l.add("</ul>");
       l.add("<p>");
       
@@ -952,6 +956,71 @@ public class QueryAnalyzer
    }
 
    /**
+    * Write indexes.html
+    */
+   private static void writeIndexes() throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
+      l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+      l.add("");
+      l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
+      l.add("<head>");
+      l.add("  <title>Index information</title>");
+      l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+      l.add("</head>");
+      l.add("<body>");
+      l.add("<h1>Index information</h1>");
+      l.add("");
+
+      l.add("<h2>Used indexes</h2>");
+      l.add("<table>");
+      for (Map.Entry<String, List<String>> entry : usedIndexes.entrySet())
+      {
+         l.add("<tr>");
+         l.add("<td>");
+         l.add(entry.getKey());
+         l.add("</td>");
+         l.add("<td>");
+         l.add(entry.getValue().toString());
+         l.add("</td>");
+         l.add("</tr>");
+      }
+      l.add("</table>");
+
+      SortedSet<String> unusedIndexes = new TreeSet<>();
+      for (Map.Entry<String, Map<String, List<String>>> entry : indexes.entrySet())
+      {
+         unusedIndexes.addAll(entry.getValue().keySet());
+      }
+      unusedIndexes.removeAll(usedIndexes.keySet());
+
+      if (unusedIndexes.size() > 0)
+      {
+         l.add("<h2>Unused indexes</h2>");
+         l.add("<table>");
+         for (String unused : unusedIndexes)
+         {
+            l.add("<tr>");
+            l.add("<td>");
+            l.add(unused);
+            l.add("</td>");
+            l.add("</tr>");
+         }
+         l.add("</table>");
+      }
+
+      l.add("<p>");
+      l.add("<a href=\"index.html\">Back</a>");
+
+      l.add("</body>");
+      l.add("</html>");
+
+      writeFile(Paths.get("report", "indexes.html"), l);
+   }
+
+   /**
     * Process the queries
     * @param c The connection
     * @return The query identifiers
@@ -1065,7 +1134,17 @@ public class QueryAnalyzer
                   String firstLine = l.get(0);
                   if (firstLine.indexOf("using") != -1)
                   {
-                     sb.append(firstLine.substring(0, firstLine.indexOf("using")).trim());
+                     String s = firstLine.substring(0, firstLine.indexOf("using")).trim();
+                     sb.append(s);
+                     if (s.indexOf("Index") != -1)
+                     {
+                        String idx = firstLine.substring(firstLine.indexOf("using") + 6, firstLine.indexOf(" on "));
+                        List<String> idxList = usedIndexes.get(idx);
+                        if (idxList == null)
+                           idxList = new ArrayList<>();
+                        idxList.add(key);
+                        usedIndexes.put(idx, idxList);
+                     }
                   }
                   else if (firstLine.indexOf("on") != -1)
                   {
@@ -1083,13 +1162,33 @@ public class QueryAnalyzer
                      {
                         if (line.indexOf("using") != -1)
                         {
+                           String s = line.substring(line.indexOf("->") + 3, line.indexOf("using")).trim();
                            sb.append(" | ");
-                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("using")).trim());
+                           sb.append(s);
+                           if (s.indexOf("Index") != -1)
+                           {
+                              String idx = line.substring(line.indexOf("using") + 6, line.indexOf(" on "));
+                              List<String> idxList = usedIndexes.get(idx);
+                              if (idxList == null)
+                                 idxList = new ArrayList<>();
+                              idxList.add(key);
+                              usedIndexes.put(idx, idxList);
+                           }
                         }
                         else if (line.indexOf("on") != -1)
                         {
+                           String s = line.substring(line.indexOf("->") + 3, line.indexOf("on")).trim();
                            sb.append(" | ");
-                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("on")).trim());
+                           sb.append(s);
+                           if (s.indexOf("Index") != -1)
+                           {
+                              String idx = line.substring(line.indexOf(" on ") + 4, line.indexOf("  ("));
+                              List<String> idxList = usedIndexes.get(idx);
+                              if (idxList == null)
+                                 idxList = new ArrayList<>();
+                              idxList.add(key);
+                              usedIndexes.put(idx, idxList);
+                           }
                         }
                         else
                         {
@@ -1101,7 +1200,7 @@ public class QueryAnalyzer
 
                   plans.put(key, sb.toString());
                }
-               else if (statement instanceof Delete)
+               else if (statement instanceof Update || statement instanceof Delete)
                {
                   StringBuilder sb = new StringBuilder();
 
@@ -1112,29 +1211,17 @@ public class QueryAnalyzer
                      {
                         if (line.indexOf("using") != -1)
                         {
-                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("using")).trim());
-                        }
-                        else if (line.indexOf("on") != -1)
-                        {
-                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("on")).trim());
-                        }
-                     }
-                  }
-
-                  plans.put(key, sb.toString());
-               }
-               else if (statement instanceof Update)
-               {
-                  StringBuilder sb = new StringBuilder();
-
-                  for (int i = 1; i < l.size(); i++)
-                  {
-                     String line = l.get(i);
-                     if (line.indexOf("->") != -1)
-                     {
-                        if (line.indexOf("using") != -1)
-                        {
-                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("using")).trim());
+                           String s = line.substring(line.indexOf("->") + 3, line.indexOf("using")).trim();
+                           sb.append(s);
+                           if (s.indexOf("Index") != -1)
+                           {
+                              String idx = line.substring(line.indexOf("using") + 6, line.indexOf(" on "));
+                              List<String> idxList = usedIndexes.get(idx);
+                              if (idxList == null)
+                                 idxList = new ArrayList<>();
+                              idxList.add(key);
+                              usedIndexes.put(idx, idxList);
+                           }
                         }
                         else if (line.indexOf("on") != -1)
                         {
@@ -2822,6 +2909,7 @@ public class QueryAnalyzer
          writeTables(c);
          writeCSV();
          writeHOT();
+         writeIndexes();
       }
       catch (Exception e)
       {

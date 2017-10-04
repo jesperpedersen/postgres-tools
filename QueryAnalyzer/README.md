@@ -106,11 +106,18 @@ The query identifiers provides the links to the report in the main report.
 
 The reports are located in the ```/path/to/work_area/report``` directory. The main report is ```index.html```
 
+The main report shows
+
+* Time of the run
+* Links to detailed reports
+* Queries with identifier, planning time, execution time and planner node types
+
 Overview reports
 
 * Tables - layout, primary key, existing indexes and suggestions for primary key and indexes
 * Times - CSV file with planning and execution times
 * HOT - Shows column status: Black = Not updated, Green = Updated but not part of an index, Red = Updated and part of an index
+* Indexes - Show index usage, and unused indexes
 
 Each query report shows
 
@@ -118,4 +125,4 @@ Each query report shows
 * The executed query, if ```query``` contains ```?```
 * The ```EXPLAIN (ANALYZE, VERBOSE, BUFFERS ON)``` plan
 * The replay file
-* Overview of the tables / indexes for the query
+* Overview of the tables, indexes and foreign key constraints for the query
