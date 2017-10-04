@@ -129,6 +129,9 @@ public class QueryAnalyzer
    /** Indexes:       Table       Index   Columns */
    private static Map<String, Map<String, List<String>>> indexes = new TreeMap<>();
    
+   /** Index color    Index   Color */
+   private static Map<String, String> indexColor = new TreeMap<>();
+
    /** Used indexes   Index        Query */
    private static Map<String, List<String>> usedIndexes = new TreeMap<>();
 
@@ -383,6 +386,8 @@ public class QueryAnalyzer
                            color = COLOR_INDEX;
                      }
                   }
+
+                  indexColor.put(idx.getKey(), color);
 
                   l.add("<td style=\"color : " + color + "\">" + idx.getKey() + "</td>");
                   l.add("<td>" + idx.getValue() + "</td>");
@@ -929,11 +934,15 @@ public class QueryAnalyzer
                }
                if (hot)
                {
+                  indexColor.put(idx.getKey(), COLOR_STD);
+
                   l.add("<td>" + idx.getKey() + "</td>");
                   l.add("<td>" + sb.toString() + "</td>");
                }
                else
                {
+                  indexColor.put(idx.getKey(), COLOR_INDEX);
+
                   l.add("<td style=\"color : " + COLOR_INDEX + "\">" + idx.getKey() + "</td>");
                   l.add("<td style=\"color : " + COLOR_INDEX + "\">" + sb.toString() + "</td>");
                }
@@ -987,8 +996,12 @@ public class QueryAnalyzer
             }
          }
 
+         String color = COLOR_STD;
+         if (indexColor.get(entry.getKey()) != null)
+            color = indexColor.get(entry.getKey());
+
          l.add("<tr>");
-         l.add("<td>");
+         l.add("<td style=\"color : " + color + "\">");
          l.add(entry.getKey());
          l.add("</td>");
          l.add("<td>");
@@ -1023,8 +1036,12 @@ public class QueryAnalyzer
                }
             }
 
+            String color = COLOR_STD;
+            if (indexColor.get(unused) != null)
+               color = indexColor.get(unused);
+
             l.add("<tr>");
-            l.add("<td>");
+            l.add("<td style=\"color : " + color + "\">");
             l.add(unused);
             l.add("</td>");
             l.add("<td>");
