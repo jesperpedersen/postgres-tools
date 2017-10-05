@@ -356,14 +356,33 @@ public class QueryAnalyzer
          if (indexData.size() > 0)
          {
             Set<String> s = set.get(tableName);
+            Set<List<String>> seen = new HashSet<>();
             l.add("<table>");
             for (Map.Entry<String, List<String>> idx : indexData.entrySet())
             {
                l.add("<tr>");
                if (indexData.get(idx.getKey()).equals(pkInfo))
                {
+                  boolean duplicated = false;
+                  for (List<String> seenIdx : seen)
+                  {
+                     if (seenIdx.containsAll(idx.getValue()))
+                     {
+                        duplicated = true;
+                     }
+                  }
+
+                  seen.add(idx.getValue());
+
                   l.add("<td><b>" + idx.getKey() + "</b></td>");
-                  l.add("<td><b>" + idx.getValue() + "</b></td>");
+                  if (duplicated)
+                  {
+                     l.add("<td style=\"color : " + COLOR_INDEX + "\"><b>" + idx.getValue() + "</b></td>");
+                  }
+                  else
+                  {
+                     l.add("<td><b>" + idx.getValue() + "</b></td>");
+                  }
 
                   if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
                   {
@@ -389,8 +408,26 @@ public class QueryAnalyzer
 
                   indexColor.put(idx.getKey(), color);
 
+                  boolean duplicated = false;
+                  for (List<String> seenIdx : seen)
+                  {
+                     if (seenIdx.containsAll(idx.getValue()))
+                     {
+                        duplicated = true;
+                     }
+                  }
+
+                  seen.add(idx.getValue());
+
                   l.add("<td style=\"color : " + color + "\">" + idx.getKey() + "</td>");
-                  l.add("<td>" + idx.getValue() + "</td>");
+                  if (duplicated)
+                  {
+                     l.add("<td style=\"color : " + COLOR_INDEX + "\">" + idx.getValue() + "</td>");
+                  }
+                  else
+                  {
+                     l.add("<td>" + idx.getValue() + "</td>");
+                  }
 
                   if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
                   {
