@@ -237,6 +237,7 @@ public class QueryAnalyzer
       l.add("<li><a href=\"indexes.html\">Indexes</a></li>");
       l.add("<li><a href=\"hot.html\">HOT</a></li>");
       l.add("<li><a href=\"result.csv\">Times</a></li>");
+      l.add("<li><a href=\"environment.html\">Environment</a></li>");
       l.add("</ul>");
       l.add("<p>");
       
@@ -1145,6 +1146,58 @@ public class QueryAnalyzer
       l.add("</html>");
 
       writeFile(Paths.get("report", "indexes.html"), l);
+   }
+
+   /**
+    * Write environment.html
+    * @parma c The connection
+    */
+   private static void writeEnvironment(Connection c) throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
+      l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+      l.add("");
+      l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
+      l.add("<head>");
+      l.add("  <title>Environment</title>");
+      l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+      l.add("</head>");
+      l.add("<body>");
+      l.add("<h1>Environment</h1>");
+      l.add("");
+
+      Statement stmt = c.createStatement();
+      stmt.execute("SELECT version()");
+      ResultSet rs = stmt.getResultSet();
+      rs.next();
+      l.add(rs.getString(1));
+      rs.close();
+
+      l.add("<p>");
+      l.add("<table>");
+      stmt.execute("SHOW all");
+      rs = stmt.getResultSet();
+      while (rs.next())
+      {
+         l.add("<tr>");
+         l.add("<td>" + rs.getString(1) + "</td>");
+         l.add("<td>" + rs.getString(2) + "</td>");
+         l.add("</tr>");
+      }
+      rs.close();
+      stmt.close();
+
+      l.add("</table>");
+
+      l.add("<p>");
+      l.add("<a href=\"index.html\">Back</a>");
+
+      l.add("</body>");
+      l.add("</html>");
+
+      writeFile(Paths.get("report", "environment.html"), l);
    }
 
    /**
@@ -3143,6 +3196,7 @@ public class QueryAnalyzer
          writeCSV();
          writeHOT();
          writeIndexes();
+         writeEnvironment(c);
       }
       catch (Exception e)
       {
