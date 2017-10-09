@@ -959,6 +959,10 @@ public class QueryAnalyzer
 
       for (Map.Entry<String, Map<String, Integer>> table : tables.entrySet())
       {
+         if (partitionMap.containsKey(table.getKey()) &&
+             Boolean.FALSE.equals(Boolean.valueOf(configuration.getProperty("show_partitions", "false"))))
+            continue;
+
          l.add("<h2>" + table.getKey().toUpperCase() + "</h2>");
 
          Set<String> setColumns = set.get(table.getKey());
