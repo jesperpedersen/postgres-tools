@@ -174,6 +174,9 @@ public class QueryAnalyzer
    /** Partitions     Parent  Children */
    private static Map<String, List<String>> partitions = new TreeMap<>();
 
+   /** Partition type:Table   Type */
+   private static Map<String, String> partitionType = new TreeMap<>();
+
    /** Partition map: Child   Parent */
    private static Map<String, String> partitionMap = new TreeMap<>();
 
@@ -331,7 +334,13 @@ public class QueryAnalyzer
             l.add("<p>");
             l.add("<u><b>Partitions</b></u>");
             l.add("<p>");
-            l.add(Integer.toString(partitions.get(tableName).size()));
+
+            StringBuilder sb = new StringBuilder();
+            sb.append(Integer.toString(partitions.get(tableName).size()));
+            sb.append(" x ");
+            sb.append(partitionType.get(tableName));
+            l.add(sb.toString());
+
             partition = true;
          }
 
@@ -847,7 +856,13 @@ public class QueryAnalyzer
             if (partitions.containsKey(tableName))
             {
                l.add("<p>");
-               l.add("Partitions: " + partitions.get(tableName).size());
+
+               StringBuilder sb = new StringBuilder();
+               sb.append(Integer.toString(partitions.get(tableName).size()));
+               sb.append(" x ");
+               sb.append(partitionType.get(tableName));
+
+               l.add("Partitions: " + sb.toString());
             }
          }
       }
@@ -3050,6 +3065,14 @@ public class QueryAnalyzer
          String parentName = rs.getString(1);
          String parentOid = rs.getString(2);
          List<String> children = new ArrayList<>();
+
+         Statement type = c.createStatement();
+         type.execute("SELECT pg_get_partkeydef(\'" + parentOid+ "\'::oid)");
+         ResultSet typeRs = type.getResultSet();
+         typeRs.next();
+         partitionType.put(parentName, typeRs.getString(1));
+         typeRs.close();
+         type.close();
 
          Statement inh = c.createStatement();
          inh.execute("SELECT inhrelid FROM pg_inherits WHERE inhparent = " + parentOid + "::oid");
