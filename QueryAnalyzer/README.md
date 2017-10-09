@@ -89,6 +89,12 @@ Display information about number of rows in each table, and number of index entr
 
 Default is ```false```
 
+### show_partitions
+
+Show partitions in the "Tables" report.
+
+Default is ```false```
+
 ### query
 
 Each configuration option that starts with ```query``` is identified as a query that should be analyzed.

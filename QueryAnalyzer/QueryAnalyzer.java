@@ -171,6 +171,12 @@ public class QueryAnalyzer
    /** Index row count: Id    Rows */
    private static Map<String, String> indexCounts = new TreeMap<>();
 
+   /** Partitions     Parent  Children */
+   private static Map<String, List<String>> partitions = new TreeMap<>();
+
+   /** Partition map: Child   Parent */
+   private static Map<String, String> partitionMap = new TreeMap<>();
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -228,9 +234,9 @@ public class QueryAnalyzer
       l.add("<h2>Overview</h2>");
       l.add("<ul>");
       l.add("<li><a href=\"tables.html\">Tables</a></li>");
-      l.add("<li><a href=\"result.csv\">Times</a></li>");
-      l.add("<li><a href=\"hot.html\">HOT</a></li>");
       l.add("<li><a href=\"indexes.html\">Indexes</a></li>");
+      l.add("<li><a href=\"hot.html\">HOT</a></li>");
+      l.add("<li><a href=\"result.csv\">Times</a></li>");
       l.add("</ul>");
       l.add("<p>");
       
@@ -275,6 +281,10 @@ public class QueryAnalyzer
 
       for (String tableName : tables.keySet())
       {
+         if (partitionMap.containsKey(tableName) &&
+             Boolean.FALSE.equals(Boolean.valueOf(configuration.getProperty("show_partitions", "false"))))
+            continue;
+
          String size = getTableSize(c, tableName);
          l.add("<h2>" + tableName.toUpperCase() + " (" + size + ")</h2>");
 
@@ -283,6 +293,7 @@ public class QueryAnalyzer
          List<String> pkInfo = primaryKeys.get(tableName);
          Map<String, Map<String, String>> exp = exports.get(tableName.toLowerCase());
          Map<String, Map<String, String>> imp = imports.get(tableName.toLowerCase());
+         boolean partition = false;
 
          l.add("<table>");
          for (String columnName : tableData.keySet())
@@ -310,6 +321,15 @@ public class QueryAnalyzer
             l.add("</tr>");
          }
          l.add("</table>");
+
+         if (partitions.containsKey(tableName))
+         {
+            l.add("<p>");
+            l.add("<u><b>Partitions</b></u>");
+            l.add("<p>");
+            l.add(Integer.toString(partitions.get(tableName).size()));
+            partition = true;
+         }
 
          if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
          {
@@ -351,6 +371,17 @@ public class QueryAnalyzer
          Map<String, List<String>> indexData = indexes.get(tableName);
          String idxSize = getIndexSize(c, tableName);
 
+         if (partition)
+         {
+            for (String part : partitions.get(tableName))
+            {
+               if (!tables.containsKey(part))
+                  initTable(c, part);
+
+               indexData.putAll(indexes.get(part));
+            }
+         }
+
          l.add("<p>");
          l.add("<u><b>Indexes (" + idxSize + ")</b></u>");
          if (indexData.size() > 0)
@@ -375,7 +406,7 @@ public class QueryAnalyzer
                   seen.add(idx.getValue());
 
                   l.add("<td><b>" + idx.getKey() + "</b></td>");
-                  if (duplicated)
+                  if (duplicated && !partition)
                   {
                      l.add("<td style=\"color : " + COLOR_INDEX + "\"><b>" + idx.getValue() + "</b></td>");
                   }
@@ -420,7 +451,7 @@ public class QueryAnalyzer
                   seen.add(idx.getValue());
 
                   l.add("<td style=\"color : " + color + "\">" + idx.getKey() + "</td>");
-                  if (duplicated)
+                  if (duplicated && !partition)
                   {
                      l.add("<td style=\"color : " + COLOR_INDEX + "\">" + idx.getValue() + "</td>");
                   }
@@ -808,6 +839,12 @@ public class QueryAnalyzer
                l.add("</tr>");
             }
             l.add("</table>");
+
+            if (partitions.containsKey(tableName))
+            {
+               l.add("<p>");
+               l.add("Partitions: " + partitions.get(tableName).size());
+            }
          }
       }
       
@@ -816,6 +853,18 @@ public class QueryAnalyzer
       {
          Map<String, List<String>> indexData = indexes.get(tableName);
          List<String> pkInfo = primaryKeys.get(tableName);
+
+         if (partitions.containsKey(tableName))
+         {
+            for (String partition : partitions.get(tableName))
+            {
+               if (!tables.containsKey(partition))
+                  initTable(c, partition);
+
+               indexData.putAll(indexes.get(partition));
+            }
+         }
+
          if (indexData.size() > 0)
          {
             l.add("<h3>" + tableName + "</h3>");
@@ -1112,6 +1161,8 @@ public class QueryAnalyzer
             keys.add(key);
       }
       
+      initPartitions(c);
+
       for (String key : keys)
       {
          String origQuery = configuration.getProperty(key);
@@ -1290,6 +1341,8 @@ public class QueryAnalyzer
                         if (line.indexOf("using") != -1)
                         {
                            String s = line.substring(line.indexOf("->") + 3, line.indexOf("using")).trim();
+                           if (sb.length() > 0)
+                              sb.append(" | ");
                            sb.append(s);
                            if (s.indexOf("Index") != -1)
                            {
@@ -1303,6 +1356,8 @@ public class QueryAnalyzer
                         }
                         else if (line.indexOf("on") != -1)
                         {
+                           if (sb.length() > 0)
+                              sb.append(" | ");
                            sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("on")).trim());
                         }
                      }
@@ -1679,7 +1734,7 @@ public class QueryAnalyzer
                   {
                      List<String> tables = new TablesNamesFinder().getTableList(s);
                      if (tables != null && tables.size() == 1)
-                        tableName = tables.get(0);
+                        tableName = tables.get(0).toLowerCase();
                   }
                   
                   if (tableName != null)
@@ -1712,7 +1767,7 @@ public class QueryAnalyzer
                   String tableName = null;
                   List<String> tables = new TablesNamesFinder().getTableList(s);
                   if (tables != null && tables.size() == 1)
-                     tableName = tables.get(0);
+                     tableName = tables.get(0).toLowerCase();
                   
                   if (tableName != null && inExpressionColumn != null)
                   {
@@ -2571,198 +2626,207 @@ public class QueryAnalyzer
       {
          if (!tables.containsKey(tableName))
          {
-            Map<String, Integer> tableData = new TreeMap<>();
-            Map<String, Integer> columnSize = new TreeMap<>();
-            ResultSet rs = null;
-            try
-            {
-               DatabaseMetaData dmd = c.getMetaData();
+            initTable(c, tableName);
+         }
+      }
 
-               rs = dmd.getColumns(null, null, tableName, "");
-               while (rs.next())
-               {
-                  String columnName = rs.getString("COLUMN_NAME");
-                  columnName = columnName.toLowerCase();
+      return result;
+   }
 
-                  int dataType = rs.getInt("DATA_TYPE");
-                  tableData.put(columnName, dataType);
+   /**
+    * Initialize table information
+    * @param c The connection
+    * @param tableName The table name
+    */
+   private static void initTable(Connection c, String tableName) throws Exception
+   {
+      Map<String, Integer> tableData = new TreeMap<>();
+      Map<String, Integer> columnSize = new TreeMap<>();
+      ResultSet rs = null;
+      try
+      {
+         DatabaseMetaData dmd = c.getMetaData();
 
-                  int size = rs.getInt("COLUMN_SIZE");
-                  columnSize.put(columnName, size);
-               }
+         rs = dmd.getColumns(null, null, tableName, "");
+         while (rs.next())
+         {
+            String columnName = rs.getString("COLUMN_NAME");
+            columnName = columnName.toLowerCase();
+
+            int dataType = rs.getInt("DATA_TYPE");
+            tableData.put(columnName, dataType);
+
+            int size = rs.getInt("COLUMN_SIZE");
+            columnSize.put(columnName, size);
+         }
             
-               tables.put(tableName, tableData);
-               columnSizes.put(tableName, columnSize);
-            }
-            finally
-            {
-               if (rs != null)
-               {
-                  try
-                  {
-                     rs.close();
-                  }
-                  catch (Exception e)
-                  {
-                     // Ignore
-                  }
-               }
-            }
-
-            rs = null;
+         tables.put(tableName, tableData);
+         columnSizes.put(tableName, columnSize);
+      }
+      finally
+      {
+         if (rs != null)
+         {
             try
             {
-               DatabaseMetaData dmd = c.getMetaData();
-               Map<String, List<String>> indexInfo = new TreeMap<>();
-
-               rs = dmd.getIndexInfo(null, null, tableName, false, false);
-               while (rs.next())
-               {
-                  String indexName = rs.getString("INDEX_NAME");
-                  String columnName = rs.getString("COLUMN_NAME");
-
-                  indexName = indexName.toLowerCase();
-                  columnName = columnName.toLowerCase();
-
-                  List<String> existing = indexInfo.get(indexName);
-                  if (existing == null)
-                     existing = new ArrayList<>();
-
-                  if (!existing.contains(columnName))
-                     existing.add(columnName);
-                  indexInfo.put(indexName, existing);
-               }
-
-               indexes.put(tableName, indexInfo);
+               rs.close();
             }
-            finally
+            catch (Exception e)
             {
-               if (rs != null)
-               {
-                  try
-                  {
-                     rs.close();
-                  }
-                  catch (Exception e)
-                  {
-                     // Ignore
-                  }
-               }
-            }
-
-            rs = null;
-            try
-            {
-               DatabaseMetaData dmd = c.getMetaData();
-               List<String> pkInfo = new ArrayList<>();
-
-               rs = dmd.getPrimaryKeys(null, null, tableName);
-               while (rs.next())
-               {
-                  String columnName = rs.getString("COLUMN_NAME");
-                  columnName = columnName.toLowerCase();
-
-                  if (!pkInfo.contains(columnName))
-                     pkInfo.add(columnName);
-               }
-
-               primaryKeys.put(tableName, pkInfo);
-            }
-            finally
-            {
-               if (rs != null)
-               {
-                  try
-                  {
-                     rs.close();
-                  }
-                  catch (Exception e)
-                  {
-                     // Ignore
-                  }
-               }
-            }
-
-            rs = null;
-            try
-            {
-               DatabaseMetaData dmd = c.getMetaData();
-
-               rs = dmd.getExportedKeys(null, null, tableName);
-               while (rs.next())
-               {
-                  Map<String, Map<String, String>> m = exports.get(tableName);
-                  if (m == null)
-                     m = new TreeMap<>();
-
-                  TreeMap<String, String> v = new TreeMap<>();
-                  v.put("FKTABLE_NAME", rs.getString("FKTABLE_NAME").toLowerCase());
-                  v.put("FKCOLUMN_NAME", rs.getString("FKCOLUMN_NAME").toLowerCase());
-                  v.put("PKTABLE_NAME", rs.getString("PKTABLE_NAME").toLowerCase());
-                  v.put("PKCOLUMN_NAME", rs.getString("PKCOLUMN_NAME").toLowerCase());
-
-                  m.put(rs.getString("FK_NAME").toLowerCase(), v);
-                  exports.put(tableName, m);
-               }
-            }
-            finally
-            {
-               if (rs != null)
-               {
-                  try
-                  {
-                     rs.close();
-                  }
-                  catch (Exception e)
-                  {
-                     // Ignore
-                  }
-               }
-            }
-
-            rs = null;
-            try
-            {
-               DatabaseMetaData dmd = c.getMetaData();
-
-               rs = dmd.getImportedKeys(null, null, tableName);
-               while (rs.next())
-               {
-                  Map<String, Map<String, String>> m = imports.get(tableName);
-                  if (m == null)
-                     m = new TreeMap<>();
-
-                  TreeMap<String, String> v = new TreeMap<>();
-                  v.put("FKTABLE_NAME", rs.getString("FKTABLE_NAME").toLowerCase());
-                  v.put("FKCOLUMN_NAME", rs.getString("FKCOLUMN_NAME").toLowerCase());
-                  v.put("PKTABLE_NAME", rs.getString("PKTABLE_NAME").toLowerCase());
-                  v.put("PKCOLUMN_NAME", rs.getString("PKCOLUMN_NAME").toLowerCase());
-
-                  m.put(rs.getString("FK_NAME").toLowerCase(), v);
-                  imports.put(tableName, m);
-               }
-
-            }
-            finally
-            {
-               if (rs != null)
-               {
-                  try
-                  {
-                     rs.close();
-                  }
-                  catch (Exception e)
-                  {
-                     // Ignore
-                  }
-               }
+               // Ignore
             }
          }
       }
-      
-      return result;
+
+      rs = null;
+      try
+      {
+         DatabaseMetaData dmd = c.getMetaData();
+         Map<String, List<String>> indexInfo = new TreeMap<>();
+
+         rs = dmd.getIndexInfo(null, null, tableName, false, false);
+         while (rs.next())
+         {
+            String indexName = rs.getString("INDEX_NAME");
+            String columnName = rs.getString("COLUMN_NAME");
+
+            indexName = indexName.toLowerCase();
+            columnName = columnName.toLowerCase();
+
+            List<String> existing = indexInfo.get(indexName);
+            if (existing == null)
+               existing = new ArrayList<>();
+
+            if (!existing.contains(columnName))
+               existing.add(columnName);
+            indexInfo.put(indexName, existing);
+         }
+
+         indexes.put(tableName, indexInfo);
+      }
+      finally
+      {
+         if (rs != null)
+         {
+            try
+            {
+               rs.close();
+            }
+            catch (Exception e)
+            {
+               // Ignore
+            }
+         }
+      }
+
+      rs = null;
+      try
+      {
+         DatabaseMetaData dmd = c.getMetaData();
+         List<String> pkInfo = new ArrayList<>();
+
+         rs = dmd.getPrimaryKeys(null, null, tableName);
+         while (rs.next())
+         {
+            String columnName = rs.getString("COLUMN_NAME");
+            columnName = columnName.toLowerCase();
+
+            if (!pkInfo.contains(columnName))
+               pkInfo.add(columnName);
+         }
+
+         primaryKeys.put(tableName, pkInfo);
+      }
+      finally
+      {
+         if (rs != null)
+         {
+            try
+            {
+               rs.close();
+            }
+            catch (Exception e)
+            {
+               // Ignore
+            }
+         }
+      }
+
+      rs = null;
+      try
+      {
+         DatabaseMetaData dmd = c.getMetaData();
+
+         rs = dmd.getExportedKeys(null, null, tableName);
+         while (rs.next())
+         {
+            Map<String, Map<String, String>> m = exports.get(tableName);
+            if (m == null)
+               m = new TreeMap<>();
+
+            TreeMap<String, String> v = new TreeMap<>();
+            v.put("FKTABLE_NAME", rs.getString("FKTABLE_NAME").toLowerCase());
+            v.put("FKCOLUMN_NAME", rs.getString("FKCOLUMN_NAME").toLowerCase());
+            v.put("PKTABLE_NAME", rs.getString("PKTABLE_NAME").toLowerCase());
+            v.put("PKCOLUMN_NAME", rs.getString("PKCOLUMN_NAME").toLowerCase());
+
+            m.put(rs.getString("FK_NAME").toLowerCase(), v);
+            exports.put(tableName, m);
+         }
+      }
+      finally
+      {
+         if (rs != null)
+         {
+            try
+            {
+               rs.close();
+            }
+            catch (Exception e)
+            {
+               // Ignore
+            }
+         }
+      }
+
+      rs = null;
+      try
+      {
+         DatabaseMetaData dmd = c.getMetaData();
+
+         rs = dmd.getImportedKeys(null, null, tableName);
+         while (rs.next())
+         {
+            Map<String, Map<String, String>> m = imports.get(tableName);
+            if (m == null)
+               m = new TreeMap<>();
+
+            TreeMap<String, String> v = new TreeMap<>();
+            v.put("FKTABLE_NAME", rs.getString("FKTABLE_NAME").toLowerCase());
+            v.put("FKCOLUMN_NAME", rs.getString("FKCOLUMN_NAME").toLowerCase());
+            v.put("PKTABLE_NAME", rs.getString("PKTABLE_NAME").toLowerCase());
+            v.put("PKCOLUMN_NAME", rs.getString("PKCOLUMN_NAME").toLowerCase());
+
+            m.put(rs.getString("FK_NAME").toLowerCase(), v);
+            imports.put(tableName, m);
+         }
+      }
+      finally
+      {
+         if (rs != null)
+         {
+            try
+            {
+               rs.close();
+            }
+            catch (Exception e)
+            {
+               // Ignore
+            }
+         }
+      }
    }
-   
+
    /**
     * Get the size of a table
     * @param c The connection
@@ -2771,12 +2835,36 @@ public class QueryAnalyzer
     */
    private static String getTableSize(Connection c, String name) throws Exception
    {
+      String result = "";
       Statement stmt = c.createStatement();
-      stmt.execute("SELECT pg_size_pretty(pg_table_size(\'" + name + "\'))");
-      ResultSet rs = stmt.getResultSet();
-      rs.next();
-      String result = rs.getString(1);
-      rs.close();
+
+      if (partitions.containsKey(name))
+      {
+         Long size = Long.valueOf(0);
+         for (String partition : partitions.get(name))
+         {
+            stmt.execute("SELECT pg_table_size(\'" + partition + "\')");
+            ResultSet rs = stmt.getResultSet();
+            rs.next();
+            size += Long.valueOf(rs.getString(1));
+            rs.close();
+         }
+
+         stmt.execute("SELECT pg_size_pretty(" + size + "::bigint)");
+         ResultSet rs = stmt.getResultSet();
+         rs.next();
+         result = rs.getString(1);
+         rs.close();
+      }
+      else
+      {
+         stmt.execute("SELECT pg_size_pretty(pg_table_size(\'" + name + "\'))");
+         ResultSet rs = stmt.getResultSet();
+         rs.next();
+         result = rs.getString(1);
+         rs.close();
+      }
+
       stmt.close();
       return result;
    }
@@ -2789,12 +2877,36 @@ public class QueryAnalyzer
     */
    private static String getIndexSize(Connection c, String name) throws Exception
    {
+      String result = "";
       Statement stmt = c.createStatement();
-      stmt.execute("SELECT pg_size_pretty(pg_indexes_size(\'" + name + "\'))");
-      ResultSet rs = stmt.getResultSet();
-      rs.next();
-      String result = rs.getString(1);
-      rs.close();
+
+      if (partitions.containsKey(name))
+      {
+         Long size = Long.valueOf(0);
+         for (String partition : partitions.get(name))
+         {
+            stmt.execute("SELECT pg_indexes_size(\'" + partition + "\')");
+            ResultSet rs = stmt.getResultSet();
+            rs.next();
+            size += Long.valueOf(rs.getString(1));
+            rs.close();
+         }
+
+         stmt.execute("SELECT pg_size_pretty(" + size + "::bigint)");
+         ResultSet rs = stmt.getResultSet();
+         rs.next();
+         result = rs.getString(1);
+         rs.close();
+      }
+      else
+      {
+         stmt.execute("SELECT pg_size_pretty(pg_indexes_size(\'" + name + "\'))");
+         ResultSet rs = stmt.getResultSet();
+         rs.next();
+         result = rs.getString(1);
+         rs.close();
+      }
+
       stmt.close();
       return result;
    }
@@ -2862,6 +2974,49 @@ public class QueryAnalyzer
       }
 
       return result;
+   }
+
+   /**
+    * Initialize partition information
+    * @param c The connection
+    */
+   private static void initPartitions(Connection c) throws Exception
+   {
+      Statement stmt = c.createStatement();
+      stmt.execute("SELECT relname, oid FROM pg_class WHERE relnamespace = 2200::oid AND relkind = \'p\'");
+      ResultSet rs = stmt.getResultSet();
+      while (rs.next())
+      {
+         String parentName = rs.getString(1);
+         String parentOid = rs.getString(2);
+         List<String> children = new ArrayList<>();
+
+         Statement inh = c.createStatement();
+         inh.execute("SELECT inhrelid FROM pg_inherits WHERE inhparent = " + parentOid + "::oid");
+         ResultSet inhRs = inh.getResultSet();
+         while (inhRs.next())
+         {
+            String childOid = inhRs.getString(1);
+
+            Statement name = c.createStatement();
+            name.execute("SELECT relname FROM pg_class WHERE oid = " + childOid + "::oid");
+            ResultSet nameRs = name.getResultSet();
+            nameRs.next();
+            String child = nameRs.getString(1);
+
+            children.add(child);
+            partitionMap.put(child, parentName);
+
+            nameRs.close();
+            name.close();
+         }
+         inhRs.close();
+         inh.close();
+
+         partitions.put(parentName, children);
+      }
+      rs.close();
+      stmt.close();
    }
 
    /**
@@ -3195,7 +3350,7 @@ public class QueryAnalyzer
          {
             List<String> tables = new TablesNamesFinder().getTableList(statement);
             if (tables != null && tables.size() == 1)
-               tableName = tables.get(0);
+               tableName = tables.get(0).toLowerCase();
          }
 
          if (tableName != null)
