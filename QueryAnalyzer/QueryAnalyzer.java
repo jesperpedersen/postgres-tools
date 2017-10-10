@@ -36,6 +36,8 @@ import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -84,20 +86,29 @@ public class QueryAnalyzer
    /** EXPLAIN (VERBOSE) */
    private static final String EXPLAIN_VERBOSE = "EXPLAIN (VERBOSE)";
 
-   /** HOT column */
-   private static final String COLOR_GREEN = "#00ff00";
+   /** Color: Green */
+   private static final String COLOR_GREEN = "lime";
 
-   /** Index column */
-   private static final String COLOR_RED = "#ff0000";
+   /** Color: Yellow */
+   private static final String COLOR_YELLOW = "yellow";
 
-   /** Standard column */
-   private static final String COLOR_BLACK = "#000000";
+   /** Color: Red */
+   private static final String COLOR_RED = "red";
 
-   /** Issue: Duplicated column */
-   private static final String ISSUE_DUPLICATED_COLUMN = "Duplicated column";
+   /** Color: Black */
+   private static final String COLOR_BLACK = "black";
 
-   /** Issue: Identical column */
-   private static final String ISSUE_IDENTICAL_COLUMN = "Identical column";
+   /** Issue type: High priority */
+   private static final int ISSUE_TYPE_HIGH_PRIORITY = 0;
+
+   /** Issue type: Normal priority */
+   private static final int ISSUE_TYPE_NORMAL_PRIORITY = 1;
+
+   /** Issue code: Duplicated column */
+   private static final String ISSUE_CODE_DUPLICATED_COLUMN = "Duplicated column";
+
+   /** Issue code: Identical column */
+   private static final String ISSUE_CODE_IDENTICAL_COLUMN = "Identical column";
 
    /** The configuration */
    private static Properties configuration;
@@ -263,7 +274,14 @@ public class QueryAnalyzer
          l.add("<tr>");
          if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("issues", "true"))) && issues.containsKey(q))
          {
-            l.add("<td style=\"background-color: " + COLOR_RED + "\"><a href=\"" + q + ".html\">" + q +"</a></td>");
+            String color = COLOR_YELLOW;
+            for (Issue is : issues.get(q))
+            {
+               if (ISSUE_TYPE_HIGH_PRIORITY == is.getType())
+                  color = COLOR_RED;
+            }
+
+            l.add("<td style=\"background-color: " + color + "\"><a href=\"" + q + ".html\">" + q +"</a></td>");
          }
          else
          {
@@ -831,9 +849,20 @@ public class QueryAnalyzer
       {
          l.add("<h2>Issues</h2>");
          l.add("<ul>");
-         for (Issue issue : issues.get(queryId))
+         List<Issue> ls = issues.get(queryId);
+         Collections.sort(ls,
+                          new Comparator<Issue>()
+                          {
+                             @Override
+                             public int compare(Issue o1, Issue o2)
+                             {
+                                return o1.getType() - o2.getType();
+                             }
+                          });
+         for (Issue issue : ls)
          {
-            l.add("<li>");
+            String color = issue.getType() == ISSUE_TYPE_HIGH_PRIORITY ? COLOR_RED : COLOR_YELLOW;
+            l.add("<li style=\"background-color: black; color: " + color + "\">");
             l.add(issue.toString());
             l.add("</li>");
          }
@@ -1935,7 +1964,7 @@ public class QueryAnalyzer
                            if (ls == null)
                               ls = new ArrayList<>();
 
-                           Issue is = new Issue(ISSUE_DUPLICATED_COLUMN, fQKey);
+                           Issue is = new Issue(ISSUE_TYPE_HIGH_PRIORITY, ISSUE_CODE_DUPLICATED_COLUMN, fQKey);
                            if (!ls.contains(is))
                            {
                               ls.add(is);
@@ -1954,7 +1983,7 @@ public class QueryAnalyzer
                            if (ls == null)
                               ls = new ArrayList<>();
 
-                           Issue is = new Issue(ISSUE_IDENTICAL_COLUMN, nameKey);
+                           Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_IDENTICAL_COLUMN, nameKey);
                            if (!ls.contains(is))
                            {
                               ls.add(is);
@@ -3577,6 +3606,9 @@ public class QueryAnalyzer
     */
    static class Issue
    {
+      /** Issue type */
+      private int type;
+
       /** Issue code */
       private String code;
 
@@ -3585,13 +3617,24 @@ public class QueryAnalyzer
 
       /**
        * Constructor
+       * @param type The type
        * @param code The code
        * @param description The description
        */
-      Issue(String code, String description)
+      Issue(int type, String code, String description)
       {
+         this.type = type;
          this.code = code;
          this.description = description;
+      }
+
+      /**
+       * Get the type
+       * @return The value
+       */
+      int getType()
+      {
+         return type;
       }
 
       /**
