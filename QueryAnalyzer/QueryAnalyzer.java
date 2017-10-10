@@ -942,22 +942,42 @@ public class QueryAnalyzer
       l.add("<h2>Foreign key constraints</h2>");
       for (String tableName : usedTables)
       {
+         Map<String, Map<String, String>> exp = exports.get(tableName);
          Map<String, Map<String, String>> imp = imports.get(tableName);
-         if (imp != null && imp.size() > 0)
+         if ((exp != null && exp.size() > 0) || (imp != null && imp.size() > 0))
          {
             l.add("<h3>" + tableName + "</h3>");
-            l.add("<table>");
-
-            for (Map.Entry<String, Map<String, String>> e : imp.entrySet())
+            if (exp != null && exp.size() > 0)
             {
-               Map<String, String> v = e.getValue();
-               l.add("<tr>");
-               l.add("<td>" + e.getKey() + "</td>");
-               l.add("<td>" + v.get("FKTABLE_NAME") + ":" + v.get("FKCOLUMN_NAME") + " -> " +
-                     v.get("PKTABLE_NAME") + ":" + v.get("PKCOLUMN_NAME") + "</td>");
-               l.add("</tr>");
+               l.add("<b>Exports</b><br/>");
+               l.add("<table>");
+               for (Map.Entry<String, Map<String, String>> e : exp.entrySet())
+               {
+                  Map<String, String> v = e.getValue();
+                  l.add("<tr>");
+                  l.add("<td>" + e.getKey() + "</td>");
+                  l.add("<td>" + v.get("FKTABLE_NAME") + ":" + v.get("FKCOLUMN_NAME") + " -> " +
+                        v.get("PKTABLE_NAME") + ":" + v.get("PKCOLUMN_NAME") + "</td>");
+                  l.add("</tr>");
+               }
+               l.add("</table>");
             }
-            l.add("</table>");
+            if (imp != null && imp.size() > 0)
+            {
+               l.add("<b>Imports</b><br/>");
+               l.add("<table>");
+
+               for (Map.Entry<String, Map<String, String>> e : imp.entrySet())
+               {
+                  Map<String, String> v = e.getValue();
+                  l.add("<tr>");
+                  l.add("<td>" + e.getKey() + "</td>");
+                  l.add("<td>" + v.get("FKTABLE_NAME") + ":" + v.get("FKCOLUMN_NAME") + " -> " +
+                        v.get("PKTABLE_NAME") + ":" + v.get("PKCOLUMN_NAME") + "</td>");
+                  l.add("</tr>");
+               }
+               l.add("</table>");
+            }
          }
       }
 
