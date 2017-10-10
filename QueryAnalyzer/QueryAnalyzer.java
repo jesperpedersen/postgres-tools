@@ -61,6 +61,9 @@ import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.Limit;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
+import net.sf.jsqlparser.statement.select.SelectExpressionItem;
+import net.sf.jsqlparser.statement.select.SelectItem;
+import net.sf.jsqlparser.statement.select.SelectItemVisitorAdapter;
 import net.sf.jsqlparser.statement.update.Update;
 import net.sf.jsqlparser.util.TablesNamesFinder;
 import net.sf.jsqlparser.util.deparser.ExpressionDeParser;
@@ -89,6 +92,12 @@ public class QueryAnalyzer
 
    /** Standard column */
    private static final String COLOR_STD = "#000000";
+
+   /** Issue: Duplicated column */
+   private static final String ISSUE_DUPLICATED_COLUMN = "Duplicated column";
+
+   /** Issue: Identical column */
+   private static final String ISSUE_IDENTICAL_COLUMN = "Identical column";
 
    /** The configuration */
    private static Properties configuration;
@@ -180,6 +189,9 @@ public class QueryAnalyzer
    /** Partition map: Child   Parent */
    private static Map<String, String> partitionMap = new TreeMap<>();
 
+   /** Issues         Query   Issues */
+   private static Map<String, List<Issue>> issues = new TreeMap<>();
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -249,7 +261,14 @@ public class QueryAnalyzer
       for (String q : queryIds)
       {
          l.add("<tr>");
-         l.add("<td><a href=\"" + q + ".html\">" + q +"</a></td>");
+         if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("issues", "true"))) && issues.containsKey(q))
+         {
+            l.add("<td style=\"background-color: " + COLOR_INDEX + "\"><a href=\"" + q + ".html\">" + q +"</a></td>");
+         }
+         else
+         {
+            l.add("<td><a href=\"" + q + ".html\">" + q +"</a></td>");
+         }
          l.add("<td>" + (plannerTimes.get(q) != null ? plannerTimes.get(q) + "ms" : "") + "</td>");
          l.add("<td>" + (plannerTimes.get(q) != null ? executorTimes.get(q) + "ms" : "") + "</td>");
          l.add("<td>" + (plans.get(q) != null ? plans.get(q) : "") + "</td>");
@@ -806,6 +825,19 @@ public class QueryAnalyzer
          l.add("<b>Replay:</b>");
          l.add("<p>");
          l.add("<a href=\"" + number + ".cli\">File</a>");
+      }
+
+      if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("issues", "true"))) && issues.containsKey(queryId))
+      {
+         l.add("<h2>Issues</h2>");
+         l.add("<ul>");
+         for (Issue issue : issues.get(queryId))
+         {
+            l.add("<li>");
+            l.add(issue.toString());
+            l.add("</li>");
+         }
+         l.add("</ul>");
       }
 
       l.add("<h2>Plan</h2>");
@@ -1860,6 +1892,68 @@ public class QueryAnalyzer
                   }
                }
             };
+
+            if (plainSelect.getSelectItems() != null)
+            {
+               Set<String> fullyQualifiedColumns = new TreeSet<>();
+               Set<String> nameColumns = new TreeSet<>();
+               SelectItemVisitorAdapter siva = new SelectItemVisitorAdapter()
+               {
+                  @Override
+                  public void visit(SelectExpressionItem sei)
+                  {
+                     if (sei.getExpression() instanceof Column)
+                     {
+                        Column column = (Column)sei.getExpression();
+                        String fQKey = column.getFullyQualifiedName().toLowerCase();
+                        String nameKey = column.getColumnName().toLowerCase();
+                        boolean add = true;
+
+                        if (fullyQualifiedColumns.contains(fQKey))
+                        {
+                           List<Issue> ls = issues.get(queryId);
+                           if (ls == null)
+                              ls = new ArrayList<>();
+
+                           Issue is = new Issue(ISSUE_DUPLICATED_COLUMN, fQKey);
+                           if (!ls.contains(is))
+                           {
+                              ls.add(is);
+                              issues.put(queryId, ls);
+                           }
+                           add = false;
+                        }
+                        else
+                        {
+                           fullyQualifiedColumns.add(fQKey);
+                        }
+
+                        if (add && nameColumns.contains(nameKey))
+                        {
+                           List<Issue> ls = issues.get(queryId);
+                           if (ls == null)
+                              ls = new ArrayList<>();
+
+                           Issue is = new Issue(ISSUE_IDENTICAL_COLUMN, nameKey);
+                           if (!ls.contains(is))
+                           {
+                              ls.add(is);
+                              issues.put(queryId, ls);
+                           }
+                        }
+                        else
+                        {
+                           nameColumns.add(nameKey);
+                        }
+                     }
+                  }
+               };
+
+               for (SelectItem si : plainSelect.getSelectItems())
+               {
+                  si.accept(siva);
+               }
+            }
 
             if (plainSelect.getJoins() != null)
             {
@@ -3455,6 +3549,78 @@ public class QueryAnalyzer
             m.put(queryId, cols);
             on.put(tableName, m);
          }
+      }
+   }
+
+   /**
+    * Issue
+    */
+   static class Issue
+   {
+      /** Issue code */
+      private String code;
+
+      /** Description */
+      private String description;
+
+      /**
+       * Constructor
+       * @param code The code
+       * @param description The description
+       */
+      Issue(String code, String description)
+      {
+         this.code = code;
+         this.description = description;
+      }
+
+      /**
+       * Get the code
+       * @return The value
+       */
+      String getCode()
+      {
+         return code;
+      }
+
+      /**
+       * Get the description
+       * @return The value
+       */
+      String getDescription()
+      {
+         return description;
+      }
+
+      /**
+       * Equals
+       * @param other The other object
+       * @return The override
+       */
+      @Override
+      public boolean equals(Object other)
+      {
+         if (other == null || !(other instanceof Issue))
+            return false;
+
+         Issue is = (Issue)other;
+         if (getCode().equals(is.getCode()))
+         {
+            if (getDescription().equals(is.getDescription()))
+               return true;
+         }
+
+         return false;
+      }
+
+      /**
+       * toString
+       * @return The override
+       */
+      @Override
+      public String toString()
+      {
+         return code + ": " + description;
       }
    }
 }

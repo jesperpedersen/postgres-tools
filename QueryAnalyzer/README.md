@@ -95,6 +95,12 @@ Show partitions in the "Tables" report.
 
 Default is ```false```
 
+### issues
+
+Show potential issues with the query.
+
+Default is ```true```
+
 ### query
 
 Each configuration option that starts with ```query``` is identified as a query that should be analyzed.
@@ -132,4 +138,5 @@ Each query report shows
 * The executed query, if ```query``` contains ```?```
 * The ```EXPLAIN (ANALYZE, VERBOSE, BUFFERS ON)``` plan
 * The replay file
+* Any issues, like duplicated columns
 * Overview of the tables, indexes and foreign key constraints for the query
