@@ -85,13 +85,13 @@ public class QueryAnalyzer
    private static final String EXPLAIN_VERBOSE = "EXPLAIN (VERBOSE)";
 
    /** HOT column */
-   private static final String COLOR_HOT = "#00ff00";
+   private static final String COLOR_GREEN = "#00ff00";
 
    /** Index column */
-   private static final String COLOR_INDEX = "#ff0000";
+   private static final String COLOR_RED = "#ff0000";
 
    /** Standard column */
-   private static final String COLOR_STD = "#000000";
+   private static final String COLOR_BLACK = "#000000";
 
    /** Issue: Duplicated column */
    private static final String ISSUE_DUPLICATED_COLUMN = "Duplicated column";
@@ -263,7 +263,7 @@ public class QueryAnalyzer
          l.add("<tr>");
          if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("issues", "true"))) && issues.containsKey(q))
          {
-            l.add("<td style=\"background-color: " + COLOR_INDEX + "\"><a href=\"" + q + ".html\">" + q +"</a></td>");
+            l.add("<td style=\"background-color: " + COLOR_RED + "\"><a href=\"" + q + ".html\">" + q +"</a></td>");
          }
          else
          {
@@ -440,7 +440,7 @@ public class QueryAnalyzer
                   l.add("<td><b>" + idx.getKey() + "</b></td>");
                   if (duplicated && !partition)
                   {
-                     l.add("<td style=\"color : " + COLOR_INDEX + "\"><b>" + idx.getValue() + "</b></td>");
+                     l.add("<td style=\"color : " + COLOR_RED + "\"><b>" + idx.getValue() + "</b></td>");
                   }
                   else
                   {
@@ -459,13 +459,13 @@ public class QueryAnalyzer
                }
                else
                {
-                  String color = COLOR_STD;
+                  String color = COLOR_BLACK;
                   if (s != null)
                   {
                      for (String col : idx.getValue())
                      {
                         if (s.contains(col))
-                           color = COLOR_INDEX;
+                           color = COLOR_RED;
                      }
                   }
 
@@ -485,7 +485,7 @@ public class QueryAnalyzer
                   l.add("<td style=\"color : " + color + "\">" + idx.getKey() + "</td>");
                   if (duplicated && !partition)
                   {
-                     l.add("<td style=\"color : " + COLOR_INDEX + "\">" + idx.getValue() + "</td>");
+                     l.add("<td style=\"color : " + COLOR_RED + "\">" + idx.getValue() + "</td>");
                   }
                   else
                   {
@@ -1053,14 +1053,14 @@ public class QueryAnalyzer
 
          for (String column : table.getValue().keySet())
          {
-            String color = COLOR_STD;
+            String color = COLOR_BLACK;
             if (indexColumns.contains(column) && setColumns.contains(column))
             {
-               color = COLOR_INDEX;
+               color = COLOR_RED;
             }
             else if (setColumns.contains(column))
             {
-               color = COLOR_HOT;
+               color = COLOR_GREEN;
             }
             
             l.add("<tr>");
@@ -1095,17 +1095,17 @@ public class QueryAnalyzer
                }
                if (hot)
                {
-                  indexColor.put(idx.getKey(), COLOR_STD);
+                  indexColor.put(idx.getKey(), COLOR_BLACK);
 
                   l.add("<td>" + idx.getKey() + "</td>");
                   l.add("<td>" + sb.toString() + "</td>");
                }
                else
                {
-                  indexColor.put(idx.getKey(), COLOR_INDEX);
+                  indexColor.put(idx.getKey(), COLOR_RED);
 
-                  l.add("<td style=\"color : " + COLOR_INDEX + "\">" + idx.getKey() + "</td>");
-                  l.add("<td style=\"color : " + COLOR_INDEX + "\">" + sb.toString() + "</td>");
+                  l.add("<td style=\"color : " + COLOR_RED + "\">" + idx.getKey() + "</td>");
+                  l.add("<td style=\"color : " + COLOR_RED + "\">" + sb.toString() + "</td>");
                }
                
                l.add("</tr>");
@@ -1157,7 +1157,7 @@ public class QueryAnalyzer
             }
          }
 
-         String color = COLOR_STD;
+         String color = COLOR_BLACK;
          if (indexColor.get(entry.getKey()) != null)
             color = indexColor.get(entry.getKey());
 
@@ -1197,7 +1197,7 @@ public class QueryAnalyzer
                }
             }
 
-            String color = COLOR_STD;
+            String color = COLOR_BLACK;
             if (indexColor.get(unused) != null)
                color = indexColor.get(unused);
 
@@ -1710,7 +1710,7 @@ public class QueryAnalyzer
 
                   StringBuilder indexName = new StringBuilder();
                   if (!hot)
-                     indexName.append("<div style=\"color : " + COLOR_INDEX + "\">");
+                     indexName.append("<div style=\"color : " + COLOR_RED + "\">");
                   indexName.append("idx_");
                   indexName.append(tableName);
                   indexName.append('_');
