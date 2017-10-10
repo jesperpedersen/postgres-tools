@@ -49,6 +49,7 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import net.sf.jsqlparser.expression.JdbcNamedParameter;
 import net.sf.jsqlparser.expression.JdbcParameter;
 import net.sf.jsqlparser.expression.LongValue;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
@@ -109,6 +110,9 @@ public class QueryAnalyzer
 
    /** Issue code: Identical column */
    private static final String ISSUE_CODE_IDENTICAL_COLUMN = "Identical column";
+
+   /** Issue code: Non parameter column */
+   private static final String ISSUE_CODE_NON_PARAMETER_COLUMN = "Non parameter column";
 
    /** The configuration */
    private static Properties configuration;
@@ -2015,6 +2019,51 @@ public class QueryAnalyzer
             if (plainSelect.getWhere() != null)
             {
                plainSelect.getWhere().accept(extraIndexExpressionDeParser);
+
+               Set<Column> nonParameterColumns = new HashSet<>();
+               ExpressionDeParser whereScanner = new ExpressionDeParser()
+               {
+                  private Column currentColumn = null;
+
+                  @Override
+                  public void visit(Column column)
+                  {
+                     if (currentColumn != null)
+                     {
+                        nonParameterColumns.add(currentColumn);
+                     }
+
+                     currentColumn = column;
+                  }
+
+                  @Override
+                  public void visit(JdbcNamedParameter jdbcNamedParameter)
+                  {
+                     currentColumn = null;
+                  }
+
+                  @Override
+                  public void visit(JdbcParameter jdbcParameter)
+                  {
+                     currentColumn = null;
+                  }
+               };
+
+               plainSelect.getWhere().accept(whereScanner);
+
+               for (Column column : nonParameterColumns)
+               {
+                  List<Issue> ls = issues.get(queryId);
+                  if (ls == null)
+                     ls = new ArrayList<>();
+
+                  Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_NON_PARAMETER_COLUMN, column.getColumnName());
+                  if (!ls.contains(is))
+                  {
+                     ls.add(is);
+                     issues.put(queryId, ls);
+                  }
+               }
             }
             
             if (plainSelect.getLimit() != null)
