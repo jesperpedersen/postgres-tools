@@ -858,7 +858,7 @@ public class LogAnalyzer
       for (String stmt : statements.keySet())
       {
          String upper = stmt.toUpperCase();
-         if (upper.startsWith("SELECT"))
+         if (upper.startsWith("SELECT") || upper.startsWith("WITH"))
          {
             queries.add("query.select." + String.format("%0" + padding + "d", select) + "=" + stmt);
             select++;
