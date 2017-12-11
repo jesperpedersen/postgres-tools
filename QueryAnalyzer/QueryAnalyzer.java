@@ -114,6 +114,9 @@ public class QueryAnalyzer
    /** Issue code: Non parameter column */
    private static final String ISSUE_CODE_NON_PARAMETER_COLUMN = "Non parameter column";
 
+   /** Issue code: Never executed */
+   private static final String ISSUE_CODE_NEVER_EXECUTED = "Never executed";
+
    /** The configuration */
    private static Properties configuration;
 
@@ -1453,8 +1456,28 @@ public class QueryAnalyzer
                         {
                            String s = line.substring(line.indexOf("->") + 3, line.indexOf("using")).trim();
                            sb.append(" | ");
-                           sb.append(s);
-                           if (s.indexOf("Index") != -1)
+                           if (line.indexOf("(never executed)") == -1)
+                           {
+                              sb.append(s);
+                           }
+                           else
+                           {
+                              sb.append("<i>");
+                              sb.append(s);
+                              sb.append("</i>");
+
+                              List<Issue> ls = issues.get(key);
+                              if (ls == null)
+                                 ls = new ArrayList<>();
+
+                              Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_NEVER_EXECUTED, line);
+                              if (!ls.contains(is))
+                              {
+                                 ls.add(is);
+                                 issues.put(key, ls);
+                              }
+                           }
+                           if (s.indexOf("Index") != -1 && line.indexOf("(never executed)") == -1)
                            {
                               String idx = line.substring(line.indexOf("using") + 6, line.indexOf(" on "));
                               List<String> idxList = usedIndexes.get(idx);
@@ -1468,8 +1491,28 @@ public class QueryAnalyzer
                         {
                            String s = line.substring(line.indexOf("->") + 3, line.indexOf("on")).trim();
                            sb.append(" | ");
-                           sb.append(s);
-                           if (s.indexOf("Index") != -1)
+                           if (line.indexOf("(never executed)") == -1)
+                           {
+                              sb.append(s);
+                           }
+                           else
+                           {
+                              sb.append("<i>");
+                              sb.append(s);
+                              sb.append("</i>");
+
+                              List<Issue> ls = issues.get(key);
+                              if (ls == null)
+                                 ls = new ArrayList<>();
+
+                              Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_NEVER_EXECUTED, line);
+                              if (!ls.contains(is))
+                              {
+                                 ls.add(is);
+                                 issues.put(key, ls);
+                              }
+                           }
+                           if (s.indexOf("Index") != -1 && line.indexOf("(never executed)") == -1)
                            {
                               String idx = line.substring(line.indexOf(" on ") + 4, line.indexOf("  ("));
                               List<String> idxList = usedIndexes.get(idx);
@@ -1481,8 +1524,29 @@ public class QueryAnalyzer
                         }
                         else
                         {
+                           String s = line.substring(line.indexOf("->") + 3, line.indexOf("  (")).trim();
                            sb.append(" | ");
-                           sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("  (")).trim());
+                           if (line.indexOf("(never executed)") == -1)
+                           {
+                              sb.append(s);
+                           }
+                           else
+                           {
+                              sb.append("<i>");
+                              sb.append(s);
+                              sb.append("</i>");
+
+                              List<Issue> ls = issues.get(key);
+                              if (ls == null)
+                                 ls = new ArrayList<>();
+
+                              Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_NEVER_EXECUTED, line);
+                              if (!ls.contains(is))
+                              {
+                                 ls.add(is);
+                                 issues.put(key, ls);
+                              }
+                           }
                         }
                      }
                   }
