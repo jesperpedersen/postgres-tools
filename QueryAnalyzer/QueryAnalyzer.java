@@ -2086,7 +2086,8 @@ public class QueryAnalyzer
             {
                for (Join join : plainSelect.getJoins())
                {
-                  join.getOnExpression().accept(new JoinVisitor(queryId, s));
+                  if (join.getOnExpression() != null)
+                     join.getOnExpression().accept(new JoinVisitor(queryId, s));
                }
             }
             
