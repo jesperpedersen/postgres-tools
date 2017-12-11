@@ -49,6 +49,9 @@ import java.util.TreeSet;
  */
 public class LogAnalyzer
 {
+   /** Default */
+   private static final String DEFAULT = "run";
+
    /** Default configuration */
    private static final String DEFAULT_CONFIGURATION = "loganalyzer.properties";
 
@@ -112,6 +115,9 @@ public class LogAnalyzer
    /** Color 2 */
    private static final String COLOR_2 = "#ccffcc";
 
+   /** Multi database */
+   private static boolean multidb;
+
    /** Keep the raw data */
    private static boolean keepRaw;
 
@@ -121,62 +127,62 @@ public class LogAnalyzer
    /** Histogram count */
    private static int histogramCount;
 
-   /** Histogram min */
-   private static double histogramMin = Double.MAX_VALUE;
-
-   /** Histogram max */
-   private static double histogramMax = Double.MIN_VALUE;
-
-   /** Histogram values */
-   private static List<Double> histogramValues = new ArrayList<>();
-
-   /** Raw data:      Process  Log */
-   private static Map<Integer, List<String>> rawData = new TreeMap<>();
-
-   /** Data:          Process  LogEntry */
-   private static Map<Integer, List<LogEntry>> data = new TreeMap<>();
-
-   /** Statements:    SQL     Count */
-   private static Map<String, Integer> statements = new TreeMap<>();
-
-   /** Max time:      SQL     Max time */
-   private static Map<String, Double> maxtime = new TreeMap<>();
-
-   /** Total time:    SQL     Time */
-   private static Map<String, Double> totaltime = new TreeMap<>();
-
-   /** Query names:   SQL     Name */
-   private static Map<String, String> queryNames = new TreeMap<>();
-
-   /** Query samples: SQL     Samples */
-   private static Map<String, List<QuerySample>> querySamples = new TreeMap<>();
-
-   /** Total idle in transaction */
-   private static long totalIdleInTransaction = 0;
-
-   /** Max clients */
-   private static int maxClients = 0;
-
    /** The file name */
    private static String filename;
-   
+
    /** The start date */
    private static String startDate;
-   
+
    /** The end date */
    private static String endDate;
-   
+
+   /** Histogram min */
+   private static Map<String, Double> histogramMin = new TreeMap<>();
+
+   /** Histogram max */
+   private static Map<String, Double> histogramMax = new TreeMap<>();
+
+   /** Histogram values */
+   private static Map<String, List<Double>> histogramValues = new TreeMap<>();
+
+   /** Raw data:      Db          Process  Log */
+   private static Map<String, Map<Integer, List<String>>> rawData = new TreeMap<>();
+
+   /** Data:          Db          Process  LogEntry */
+   private static Map<String, Map<Integer, List<LogEntry>>> data = new TreeMap<>();
+
+   /** Statements:    Db          SQL     Count */
+   private static Map<String, Map<String, Integer>> statements = new TreeMap<>();
+
+   /** Max time:      Db          SQL     Max time */
+   private static Map<String, Map<String, Double>> maxtime = new TreeMap<>();
+
+   /** Total time:    Db          SQL     Time */
+   private static Map<String, Map<String, Double>> totaltime = new TreeMap<>();
+
+   /** Query names:   Db          SQL     Name */
+   private static Map<String, Map<String, String>> queryNames = new TreeMap<>();
+
+   /** Query samples: Db          SQL     Samples */
+   private static Map<String, Map<String, List<QuerySample>>> querySamples = new TreeMap<>();
+
+   /** Total idle in transaction */
+   private static Map<String, Long> totalIdleInTransaction = new TreeMap<>();
+
+   /** Max clients */
+   private static Map<String, Integer> maxClients = new TreeMap<>();
+
    /** Parse time */
-   private static double parseTime;
+   private static Map<String, Double> parseTime = new TreeMap<>();
    
    /** Bind time */
-   private static double bindTime;
+   private static Map<String, Double> bindTime = new TreeMap<>();
    
    /** Execute time */
-   private static double executeTime;
+   private static Map<String, Double> executeTime = new TreeMap<>();
    
    /** Empty time */
-   private static double emptyTime;
+   private static Map<String, Double> emptyTime = new TreeMap<>();
    
    /**
     * Write data to a file
@@ -204,6 +210,69 @@ public class LogAnalyzer
     */
    private static void writeIndex() throws Exception
    {
+      if (!multidb)
+      {
+         writeReport(DEFAULT, "index");
+      }
+      else
+      {
+         List<String> l = new ArrayList<>();
+
+         l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
+         l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+         l.add("");
+         l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
+         l.add("<head>");
+         l.add("  <title>Log Analysis: " + filename + "</title>");
+         l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
+         l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+         l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
+         l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+         l.add("</head>");
+         l.add("<body>");
+         l.add("<h1>Log Analysis</h1>");
+         l.add("");
+
+         l.add("<table>");
+         l.add("<tr>");
+         l.add("<td><b>File</b></td>");
+         l.add("<td>" + filename + "</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td><b>Start</b></td>");
+         l.add("<td>" + startDate + "</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td><b>End</b></td>");
+         l.add("<td>" + endDate + "</td>");
+         l.add("</tr>");
+         l.add("</table>");
+
+         l.add("<ul>");
+         for (String id : statements.keySet())
+         {
+            l.add("<li>");
+            l.add("<a href=\"" + id + ".html\">" + id + "</a>");
+            l.add("</li>");
+
+            writeReport(id, id);
+         }
+         l.add("</ul>");
+
+         l.add("</body>");
+         l.add("</html>");
+
+         writeFile(Paths.get("report", "index.html"), l);
+      }
+   }
+
+   /**
+    * Write report
+    * @param id The identifier
+    * @param file The file name
+    */
+   private static void writeReport(String id, String file) throws Exception
+   {
       List<String> l = new ArrayList<>();
 
       l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
@@ -211,7 +280,7 @@ public class LogAnalyzer
       l.add("");
       l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
       l.add("<head>");
-      l.add("  <title>Log Analysis: " + filename + "</title>");
+      l.add("  <title>Log Analysis: " + (!multidb ? filename : filename + " - " + id) + "</title>");
       l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
       l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
       l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
@@ -222,21 +291,24 @@ public class LogAnalyzer
       l.add("");
 
       l.add("<table>");
-      l.add("<tr>");
-      l.add("<td><b>File</b></td>");
-      l.add("<td>" + filename + "</td>");
-      l.add("</tr>");
-      l.add("<tr>");
-      l.add("<td><b>Start</b></td>");
-      l.add("<td>" + startDate + "</td>");
-      l.add("</tr>");
-      l.add("<tr>");
-      l.add("<td><b>End</b></td>");
-      l.add("<td>" + endDate + "</td>");
-      l.add("</tr>");
+      if (!multidb)
+      {
+         l.add("<tr>");
+         l.add("<td><b>File</b></td>");
+         l.add("<td>" + filename + "</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td><b>Start</b></td>");
+         l.add("<td>" + startDate + "</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td><b>End</b></td>");
+         l.add("<td>" + endDate + "</td>");
+         l.add("</tr>");
+      }
       l.add("<tr>");
       l.add("<td><b>Run</b></td>");
-      l.add("<td><a href=\"run.properties\">Link</a></td>");
+      l.add("<td><a href=\"" + id + ".properties\">Link</a></td>");
       l.add("</tr>");
       l.add("</table>");
 
@@ -249,12 +321,12 @@ public class LogAnalyzer
       double totalWeight = 0;
       
       TreeMap<Integer, List<String>> counts = new TreeMap<>();
-      for (String stmt : statements.keySet())
+      for (String stmt : statements.get(id).keySet())
       {
-         Integer count = statements.get(stmt);
+         Integer count = statements.get(id).get(stmt);
 
          String upper = stmt.toUpperCase();
-         if (upper.startsWith("SELECT"))
+         if (upper.startsWith("SELECT") || upper.startsWith("WITH"))
          {
             selectWeight += count;
          }
@@ -281,25 +353,34 @@ public class LogAnalyzer
       totalWeight = selectWeight + updateWeight + insertWeight + deleteWeight;
       
       List<String> interactionLinks = new ArrayList<>();
-      for (Integer processId : data.keySet())
+      Map<Integer, List<LogEntry>> dd = data.get(id);
+      for (Integer processId : dd.keySet())
       {
-         List<LogEntry> lle = data.get(processId);
+         List<LogEntry> lle = dd.get(processId);
          int executeCount = getExecuteCount(lle);
          if (executeCount > 0)
          {
+            String pname = (!multidb ? Integer.toString(processId) : id + "-" + processId);
             if (interaction)
-               interactionLinks.add("<a href=\"" + processId + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
-            writeInteractionReport(processId, lle);
+               interactionLinks.add("<a href=\"" + pname + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
+            writeInteractionReport(id, pname, lle);
          }
       }
 
       int qNumber = 1;
-      for (String sql : querySamples.keySet())
+      Map<String, List<QuerySample>> qs = querySamples.get(id);
+      for (String sql : qs.keySet())
       {
-         String qName = "q" + qNumber;
-         queryNames.put(sql, qName);
+         String qName = multidb ? id + "-" : "";
+         qName += "q" + qNumber;
 
-         writeQueryReport(sql, qName);
+         Map<String, String> qn = queryNames.get(id);
+         if (qn == null)
+            qn = new TreeMap<>();
+         qn.put(sql, qName);
+         queryNames.put(id, qn);
+
+         writeQueryReport(id, sql, qName);
 
          qNumber++;
       }
@@ -311,20 +392,20 @@ public class LogAnalyzer
       l.add("<td><b>SELECT</b></td>");
       l.add("<td>" +  String.format("%.2f", totalWeight != 0.0 ? ((selectWeight / totalWeight) * 100) : 0.0) + "%</td>");
       l.add("<td><b>PARSE</b></td>");
-      l.add("<td>" +  String.format("%.3f", parseTime) + " ms</td>");
+      l.add("<td>" +  String.format("%.3f", (parseTime.get(id) != null ? parseTime.get(id) : 0.0)) + " ms</td>");
       l.add("<td><b>BEGIN</b></td>");
-      l.add("<td>" + (statements.get("BEGIN") != null ? statements.get("BEGIN") : 0) + "</td>");
+      l.add("<td>" + (statements.get(id).get("BEGIN") != null ? statements.get(id).get("BEGIN") : 0) + "</td>");
       l.add("<td><b>MAX CLIENTS</b></td>");
-      l.add("<td>" + (maxClients != 0 ? maxClients : 1) + "</td>");
+      l.add("<td>" + (maxClients.get(id) != null && maxClients.get(id) != 0 ? maxClients.get(id) : 1) + "</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>UPDATE</b></td>");
       l.add("<td>" + String.format("%.2f", totalWeight != 0.0 ? ((updateWeight / totalWeight) * 100) : 0.0) + "%</td>");
       l.add("<td><b>BIND</b></td>");
-      l.add("<td>" +  String.format("%.3f", bindTime) + " ms</td>");
+      l.add("<td>" +  String.format("%.3f", (bindTime.get(id) != null ? bindTime.get(id) : 0.0)) + " ms</td>");
       l.add("<td><b>COMMIT</b></td>");
-      l.add("<td>" + ((statements.get("COMMIT") != null ? statements.get("COMMIT") : 0) +
-                      (statements.get("COMMIT PREPARED") != null ? statements.get("COMMIT PREPARED") : 0)) + "</td>");
+      l.add("<td>" + ((statements.get(id).get("COMMIT") != null ? statements.get(id).get("COMMIT") : 0) +
+                      (statements.get(id).get("COMMIT PREPARED") != null ? statements.get(id).get("COMMIT PREPARED") : 0)) + "</td>");
       l.add("<td></td>");
       l.add("<td></td>");
       l.add("</tr>");
@@ -332,10 +413,10 @@ public class LogAnalyzer
       l.add("<td><b>INSERT</b></td>");
       l.add("<td>" + String.format("%.2f", totalWeight != 0.0 ? ((insertWeight / totalWeight) * 100) : 0.0) + "%</td>");
       l.add("<td><b>EXECUTE</b></td>");
-      l.add("<td>" +  String.format("%.3f", executeTime) + " ms</td>");
+      l.add("<td>" +  String.format("%.3f", (executeTime.get(id) != null ? executeTime.get(id) : 0.0)) + " ms</td>");
       l.add("<td><b>ROLLBACK</b></td>");
-      l.add("<td>" + ((statements.get("ROLLBACK") != null ? statements.get("ROLLBACK") : 0) +
-                      (statements.get("ROLLBACK PREPARED") != null ? statements.get("ROLLBACK PREPARED") : 0)) + "</td>");
+      l.add("<td>" + ((statements.get(id).get("ROLLBACK") != null ? statements.get(id).get("ROLLBACK") : 0) +
+                      (statements.get(id).get("ROLLBACK PREPARED") != null ? statements.get(id).get("ROLLBACK PREPARED") : 0)) + "</td>");
       l.add("<td></td>");
       l.add("<td></td>");
       l.add("</tr>");
@@ -343,19 +424,22 @@ public class LogAnalyzer
       l.add("<td><b>DELETE</b></td>");
       l.add("<td>" + String.format("%.2f", totalWeight != 0.0 ? ((deleteWeight / totalWeight) * 100) : 0.0) + "%</td>");
       l.add("<td><b>TOTAL</b></td>");
-      l.add("<td>" +  String.format("%.3f", parseTime + bindTime + executeTime) + " ms</td>");
+      l.add("<td>" +  String.format("%.3f",
+                                    (parseTime.get(id) != null ? parseTime.get(id) : 0.0) +
+                                    (bindTime.get(id) != null ? bindTime.get(id) : 0.0) +
+                                    (executeTime.get(id) != null ? executeTime.get(id) : 0.0)) + " ms</td>");
       l.add("<td><b>IDLE</b></td>");
-      l.add("<td>" +  totalIdleInTransaction + " ms</td>");
+      l.add("<td>" +  (totalIdleInTransaction.get(id) != null ? totalIdleInTransaction.get(id) : 0.0) + " ms</td>");
       l.add("<td></td>");
       l.add("<td></td>");
       l.add("</tr>");
-      if (emptyTime > 0.0)
+      if (emptyTime.get(id) != null && emptyTime.get(id) > 0.0)
       {
          l.add("<tr>");
          l.add("<td></td>");
          l.add("<td></td>");
          l.add("<td><b>EMPTY</b></td>");
-         l.add("<td>" + String.format("%.3f", emptyTime) + " ms</td>");
+         l.add("<td>" + String.format("%.3f", emptyTime.get(id)) + " ms</td>");
          l.add("<td></td>");
          l.add("<td></td>");
          l.add("<td></td>");
@@ -377,7 +461,7 @@ public class LogAnalyzer
             String v = ls.get(i);
             if (!filterStatement(v))
             {
-               sb = sb.append("<a href=\"" + (queryNames.get(v)) + ".html\" class=\"nohighlight\">" + v + "</a>");
+               sb = sb.append("<a href=\"" + (queryNames.get(id).get(v)) + ".html\" class=\"nohighlight\">" + v + "</a>");
                if (i < ls.size() - 1)
                   sb = sb.append("<p>");
             }
@@ -396,9 +480,10 @@ public class LogAnalyzer
 
       l.add("<h2>Total time</h2>");
       TreeMap<Double, List<String>> times = new TreeMap<>();
-      for (String stmt : totaltime.keySet())
+      Map<String, Double> tt = totaltime.get(id);
+      for (String stmt : tt.keySet())
       {
-         Double d = totaltime.get(stmt);
+         Double d = tt.get(stmt);
          List<String> stmts = times.get(d);
          if (stmts == null)
             stmts = new ArrayList<>();
@@ -409,13 +494,14 @@ public class LogAnalyzer
 
       l.add("<table border=\"1\">");
       int count = 0;
+      Map<String, String> qn = queryNames.get(id);
       for (Double d : times.descendingKeySet())
       {
          List<String> stmts = times.get(d);
          StringBuilder sb = new StringBuilder();
          for (int i = 0; i < stmts.size(); i++)
          {
-            sb = sb.append("<a href=\"" + (queryNames.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
+            sb = sb.append("<a href=\"" + (qn.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
             if (i < stmts.size() - 1)
                sb = sb.append("<p>");
          }
@@ -433,9 +519,10 @@ public class LogAnalyzer
       
       l.add("<h2>Max time</h2>");
       times = new TreeMap<>();
-      for (String stmt : maxtime.keySet())
+      Map<String, Double> mt = maxtime.get(id);
+      for (String stmt : mt.keySet())
       {
-         Double d = maxtime.get(stmt);
+         Double d = mt.get(stmt);
          List<String> stmts = times.get(d);
          if (stmts == null)
             stmts = new ArrayList<>();
@@ -452,7 +539,7 @@ public class LogAnalyzer
          StringBuilder sb = new StringBuilder();
          for (int i = 0; i < stmts.size(); i++)
          {
-            sb = sb.append("<a href=\"" + (queryNames.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
+            sb = sb.append("<a href=\"" + (qn.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
             if (i < stmts.size() - 1)
                sb = sb.append("<p>");
          }
@@ -472,11 +559,18 @@ public class LogAnalyzer
       {
          l.add("<h2>Transaction histogram</h2>");
          int[] h = new int[histogramCount];
-         double delta = (histogramMax - histogramMin) / (double)histogramCount;
 
-         for (Double d : histogramValues)
+         Double hMax = histogramMax.get(id);
+         if (hMax == null)
+            hMax = Double.valueOf(0);
+         Double hMin = histogramMin.get(id);
+         if (hMin == null)
+            hMin = Double.valueOf(0);
+
+         double delta = (hMax - hMin) / (double)histogramCount;
+         for (Double d : histogramValues.get(id))
          {
-            h[Math.min(histogramCount - 1, (int)((d / histogramMax) * histogramCount))]++;
+            h[Math.min(histogramCount - 1, (int)((d / hMax) * histogramCount))]++;
          }
 
          l.add("<div id=\"txhistogram\" style=\"width:1024px; height:768px;\">");
@@ -486,9 +580,9 @@ public class LogAnalyzer
          txHistogram.add("Duration,Count");
          for (int i = 0; i < h.length; i++)
          {
-            txHistogram.add((histogramMin + i * delta) + "," + h[i]);
+            txHistogram.add((hMin + i * delta) + "," + h[i]);
          }
-         writeFile(Paths.get("report", "transaction.csv"), txHistogram);
+         writeFile(Paths.get("report", (!multidb ? "transaction.csv" : id + "-transaction.csv")), txHistogram);
       }
 
       if (interaction)
@@ -504,7 +598,7 @@ public class LogAnalyzer
       {
          l.add("<script type=\"text/javascript\">");
          l.add("   txHistogram = new Dygraph(document.getElementById(\"txhistogram\"),");
-         l.add("                             \"transaction.csv\",");
+         l.add("                             \"" + (!multidb ? "transaction.csv" : id + "-transaction.csv") + "\",");
          l.add("                             {");
          l.add("                               legend: 'always',");
          l.add("                               ylabel: 'Count',");
@@ -516,15 +610,16 @@ public class LogAnalyzer
       l.add("</body>");
       l.add("</html>");
 
-      writeFile(Paths.get("report", "index.html"), l);
+      writeFile(Paths.get("report", file + ".html"), l);
    }
 
    /**
     * Write the interaction report
-    * @param processId The process id
+    * @param id The database identifier
+    * @param pname The process name
     * @param lle The interactions
     */
-   private static void writeInteractionReport(Integer processId, List<LogEntry> lle) throws Exception
+   private static void writeInteractionReport(String id, String pname, List<LogEntry> lle) throws Exception
    {
       List<String> queries = new ArrayList<>();
       List<String> transactionTimeline = new ArrayList<>();
@@ -627,7 +722,10 @@ public class LogAnalyzer
                }
 
                // Total time
-               Double time = totaltime.get(s);
+               Map<String, Double> tt = totaltime.get(id);
+               if (tt == null)
+                  tt = new TreeMap<>();
+               Double time = tt.get(s);
                if (time == null)
                {
                   time = new Double(duration);
@@ -636,31 +734,40 @@ public class LogAnalyzer
                {
                   time = new Double(time.doubleValue() + duration);
                }
-               totaltime.put(s, time);
+               tt.put(s, time);
+               totaltime.put(id, tt);
 
                // Max time
-               time = maxtime.get(s);
+               Map<String, Double> mt = maxtime.get(id);
+               if (mt == null)
+                  mt = new TreeMap<>();
+               time = mt.get(s);
                if (time == null || duration > time.doubleValue())
                {
                   time = new Double(duration);
-                  maxtime.put(s, time);
+                  mt.put(s, time);
                }
+               maxtime.put(id, mt);
 
+               Map<String, List<QuerySample>> qs = querySamples.get(id);
+               if (qs == null)
+                  qs = new TreeMap<>();
                if (histogramCount > 0)
                {
-                  List<QuerySample> l = querySamples.get(s);
+                  List<QuerySample> l = qs.get(s);
 
                   if (l == null)
                      l = new ArrayList<>();
 
                   l.add(new QuerySample(le.timeAsLong(), duration));
-                  querySamples.put(s, l);
+                  qs.put(s, l);
                }
                else
                {
-                  if (!querySamples.containsKey(s))
-                     querySamples.put(s, new ArrayList<>(0));
+                  if (!qs.containsKey(s))
+                     qs.put(s, new ArrayList<>(0));
                }
+               querySamples.put(id, qs);
 
                if (inTransaction)
                   transactionTime += le.getDuration();
@@ -728,13 +835,29 @@ public class LogAnalyzer
                {
                   if (histogramCount > 0)
                   {
-                     histogramValues.add(transactionTime);
+                     List<Double> hv = histogramValues.get(id);
+                     if (hv == null)
+                        hv = new ArrayList<>();
+                     hv.add(transactionTime);
+                     histogramValues.put(id, hv);
 
-                     if (transactionTime < histogramMin)
-                        histogramMin = transactionTime;
+                     Double hm = histogramMin.get(id);
+                     if (hm == null)
+                        hm = Double.MAX_VALUE;
+                     if (transactionTime < hm)
+                     {
+                        hm = transactionTime;
+                        histogramMin.put(id, hm);
+                     }
 
-                     if (transactionTime > histogramMax)
-                        histogramMax = transactionTime;
+                     hm = histogramMax.get(id);
+                     if (hm == null)
+                        hm = Double.MIN_VALUE;
+                     if (transactionTime > hm)
+                     {
+                        hm = transactionTime;
+                        histogramMax.put(id, hm);
+                     }
                   }
 
                   color = !color;
@@ -748,7 +871,11 @@ public class LogAnalyzer
          }
       }
 
-      totalIdleInTransaction += pIdleInTransaction;
+      Long tidit = totalIdleInTransaction.get(id);
+      if (tidit == null)
+         tidit = Long.valueOf(0);
+      tidit += pIdleInTransaction;
+      totalIdleInTransaction.put(id, tidit);
 
       if (interaction)
       {
@@ -758,14 +885,14 @@ public class LogAnalyzer
          l.add("");
          l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
          l.add("<head>");
-         l.add("  <title>Log Analysis: " + processId + "</title>");
+         l.add("  <title>Log Analysis: " + pname + "</title>");
          l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
          l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
          l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
          l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
          l.add("</head>");
          l.add("<body>");
-         l.add("<h1>" + processId + "</h1>");
+         l.add("<h1>" + pname + "</h1>");
          l.add("");
 
          l.add("<h2>Overview</h2>");
@@ -796,6 +923,14 @@ public class LogAnalyzer
          l.add("<td><b>ROLLBACK</b></td>");
          l.add("<td>" + rollback + "</td>");
          l.add("</tr>");
+
+         if (keepRaw)
+         {
+            l.add("<tr>");
+            l.add("<td><b>Raw</b></td>");
+            l.add("<td><a href=\"" + pname + ".log\">Link</a></td>");
+            l.add("</tr>");
+         }
          l.add("</table>");
 
          l.add("<h2>Time line</h2>");
@@ -807,17 +942,11 @@ public class LogAnalyzer
          l.addAll(queries);
          l.add("</table>");
 
-         if (keepRaw)
-         {
-            l.add("<h2>Raw</h2>");
-            l.add("<a href=\"" + processId + ".log\">Link</a>");
-         }
-      
          l.add("<p>");
          l.add("<a href=\"index.html\">Back</a>");
          l.add("<script type=\"text/javascript\">");
          l.add("   txTimeline = new Dygraph(document.getElementById(\"txtimeline\"),");
-         l.add("                            \"" + processId + "-transaction.csv\",");
+         l.add("                            \"" + pname + "-transaction.csv\",");
          l.add("                            {");
          l.add("                              legend: 'always',");
          l.add("                              ylabel: 'Duration',");
@@ -828,15 +957,16 @@ public class LogAnalyzer
          l.add("</body>");
          l.add("</html>");
 
-         writeFile(Paths.get("report", processId + ".html"), l);
-         writeFile(Paths.get("report", processId + "-transaction.csv"), transactionTimeline);
+         writeFile(Paths.get("report", pname + ".html"), l);
+         writeFile(Paths.get("report", pname + "-transaction.csv"), transactionTimeline);
       }
    }
    
    /**
-    * Write run.properties
+    * Write <run>.properties
+    * @param id The identifier
     */
-   private static void writeQueryAnalyzerFile() throws Exception
+   private static void writeQueryAnalyzerFile(String id) throws Exception
    {
       List<String> l = new ArrayList<>();
       List<String> queries = new ArrayList<>();
@@ -846,7 +976,7 @@ public class LogAnalyzer
       int insert = 1;
       int delete = 1;
 
-      int padding = (int)Math.log10(statements.size()) + 1;
+      int padding = (int)Math.log10(statements.get(id).size()) + 1;
       
       l.add("# https://github.com/jesperpedersen/postgres-tools/tree/master/QueryAnalyzer");
       l.add("host=localhost # ChangeMe");
@@ -855,7 +985,7 @@ public class LogAnalyzer
       l.add("user=test # ChangeMe");
       l.add("password=test # ChangeMe");
 
-      for (String stmt : statements.keySet())
+      for (String stmt : statements.get(id).keySet())
       {
          String upper = stmt.toUpperCase();
          if (upper.startsWith("SELECT") || upper.startsWith("WITH"))
@@ -883,7 +1013,7 @@ public class LogAnalyzer
       Collections.sort(queries);
       l.addAll(queries);
       
-      writeFile(Paths.get("report", "run.properties"), l);
+      writeFile(Paths.get("report", id + ".properties"), l);
    }
    
    /**
@@ -925,10 +1055,11 @@ public class LogAnalyzer
 
    /**
     * Write the query report
+    * @param id The database identifier
     * @param sql The SQL
     * @param qName The query name
     */
-   private static void writeQueryReport(String sql, String qName) throws Exception
+   private static void writeQueryReport(String id, String sql, String qName) throws Exception
    {
       List<String> l = new ArrayList<>();
 
@@ -952,15 +1083,15 @@ public class LogAnalyzer
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>Count</b></td>");
-      l.add("<td>" + statements.get(sql) + "</td>");
+      l.add("<td>" + statements.get(id).get(sql) + "</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>Total time</b></td>");
-      l.add("<td>" + String.format("%.3f", totaltime.get(sql)) + " ms</td>");
+      l.add("<td>" + String.format("%.3f", totaltime.get(id).get(sql)) + " ms</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>Max time</b></td>");
-      l.add("<td>" + String.format("%.3f", maxtime.get(sql)) + " ms</td>");
+      l.add("<td>" + String.format("%.3f", maxtime.get(id).get(sql)) + " ms</td>");
       l.add("</tr>");
       l.add("</table>");
       l.add("<p>");
@@ -974,7 +1105,7 @@ public class LogAnalyzer
 
       if (histogramCount > 0)
       {
-         qsl = querySamples.get(sql);
+         qsl = querySamples.get(id).get(sql);
          for (QuerySample qs : qsl)
          {
             double d = qs.getDuration();
@@ -1085,6 +1216,12 @@ public class LogAnalyzer
          int bracket2Start = s.indexOf("[", bracket1End + 1);
          int bracket2End = s.indexOf("]", bracket1End + 1);
 
+         if (multidb)
+         {
+            bracket2Start = s.indexOf("[", bracket2End + 1);
+            bracket2End = s.indexOf("]", bracket2End + 1);
+         }
+
          String type = s.substring(bracket2End + 2, s.indexOf(":", bracket2End + 2));
 
          if ("LOG".equals(type))
@@ -1158,7 +1295,7 @@ public class LogAnalyzer
     */
    private static void processLog() throws Exception
    {
-      Set<Integer> clients = new TreeSet<>();
+      Map<String, Set<Integer>> clients = new TreeMap<>();
       FileReader fr = null;
       LineNumberReader lnr = null;
       String s = null;
@@ -1189,49 +1326,82 @@ public class LogAnalyzer
                // Raw data insert
                if (keepRaw)
                {
-                  List<String> ls = rawData.get(le.getProcessId());
+                  Map<Integer, List<String>> rd = rawData.get(le.getDatabase());
+                  if (rd == null)
+                     rd = new TreeMap<>();
+
+                  List<String> ls = rd.get(le.getProcessId());
                   if (ls == null)
                      ls = new ArrayList<>();
-                  ls.add(s);
-                  rawData.put(le.getProcessId(), ls);
+                  if (s != null)
+                     ls.add(s);
+                  rd.put(le.getProcessId(), ls);
+                  rawData.put(le.getDatabase(), rd);
                }
 
                // Data insert
-               List<LogEntry> lle = data.get(le.getProcessId());
+               Map<Integer, List<LogEntry>> dm = data.get(le.getDatabase());
+               if (dm == null)
+                  dm = new TreeMap<>();
+               List<LogEntry> lle = dm.get(le.getProcessId());
                if (lle == null)
                   lle = new ArrayList<>();
                lle.add(le);
-               data.put(le.getProcessId(), lle);
+               dm.put(le.getProcessId(), lle);
+               data.put(le.getDatabase(), dm);
          
                if (le.isParse())
                {
-                  parseTime += le.getDuration();
+                  Double pt = parseTime.get(le.getDatabase());
+                  if (pt == null)
+                     pt = Double.valueOf(0);
+                  pt += le.getDuration();
+                  parseTime.put(le.getDatabase(), pt);
                }
                else if (le.isBind())
                {
-                  bindTime += le.getDuration();
+                  Double bt = bindTime.get(le.getDatabase());
+                  if (bt == null)
+                     bt = Double.valueOf(0);
+                  bt += le.getDuration();
+                  bindTime.put(le.getDatabase(), bt);
 
                   String stmt = le.getStatement();
                   if (stmt == null || "".equals(stmt.trim()))
                   {
-                     emptyTime += le.getDuration() + lle.get(lle.size() - 2).getDuration();
+                     Double et = emptyTime.get(le.getDatabase());
+                     if (et == null)
+                        et = Double.valueOf(0);
+                     et += le.getDuration() + lle.get(lle.size() - 2).getDuration();
+                     emptyTime.put(le.getDatabase(), et);
                   }
                   else
                   {
                      if (le.getStatement().equals("BEGIN"))
                      {
-                        clients.add(le.getProcessId());
+                        Set<Integer> c = clients.get(le.getDatabase());
+                        if (c == null)
+                           c = new TreeSet<>();
+                        c.add(le.getProcessId());
+                        clients.put(le.getDatabase(), c);
                      }
                   }
                }
                else if (le.isExecute() || le.isStmt())
                {
-                  executeTime += le.getDuration();
+                  Double et = executeTime.get(le.getDatabase());
+                  if (et == null)
+                     et = Double.valueOf(0);
+                  et += le.getDuration();
+                  executeTime.put(le.getDatabase(), et);
 
                   String stmt = le.getStatement();
 
                   // Statements insert
-                  Integer count = statements.get(stmt);
+                  Map<String, Integer> sc = statements.get(le.getDatabase());
+                  if (sc == null)
+                     sc = new TreeMap<>();
+                  Integer count = sc.get(stmt);
                   if (count == null)
                   {
                      count = Integer.valueOf(1);
@@ -1240,14 +1410,24 @@ public class LogAnalyzer
                   {
                      count = Integer.valueOf(count.intValue() + 1);
                   }
-                  statements.put(stmt, count);
+                  sc.put(stmt, count);
+                  statements.put(le.getDatabase(), sc);
 
                   if (le.getStatement().startsWith("COMMIT") || le.getStatement().startsWith("ROLLBACK"))
                   {
-                     if (maxClients < clients.size())
-                        maxClients = clients.size();
+                     Set<Integer> c = clients.get(le.getDatabase());
+                     if (c == null)
+                        c = new TreeSet<>();
 
-                     clients.remove(le.getProcessId());
+                     Integer mc = maxClients.get(le.getDatabase());
+                     if (mc == null)
+                        mc = Integer.valueOf(0);
+
+                     if (mc < c.size())
+                        maxClients.put(le.getDatabase(), c.size());
+
+                     c.remove(le.getProcessId());
+                     clients.put(le.getDatabase(), c);
                   }
                }
             }
@@ -1269,10 +1449,13 @@ public class LogAnalyzer
 
       if (keepRaw)
       {
-         for (Integer proc : rawData.keySet())
+         for (Map.Entry<String, Map<Integer, List<String>>> e : rawData.entrySet())
          {
-            List<String> write = rawData.get(proc);
-            writeFile(Paths.get("report", proc + ".log"), write);
+            for (Integer proc : e.getValue().keySet())
+            {
+               List<String> write = e.getValue().get(proc);
+               writeFile(Paths.get("report", (!multidb ? "" : e.getKey() + "-") + proc + ".log"), write);
+            }
          }
       }
    }
@@ -1374,13 +1557,24 @@ public class LogAnalyzer
          interaction = Boolean.valueOf(configuration.getProperty("interaction", "true"));
          histogramCount = Integer.valueOf(configuration.getProperty("histogram", "1000"));
          df = new SimpleDateFormat(configuration.getProperty("date_format", "yyyy-MM-dd HH:mm:ss.SSS"));
+         multidb = Boolean.valueOf(configuration.getProperty("multidb", "false"));
 
          setup();
 
          filename = args[0];
          processLog();
          writeIndex();
-         writeQueryAnalyzerFile();
+         if (!multidb)
+         {
+            writeQueryAnalyzerFile(DEFAULT);
+         }
+         else
+         {
+            for (String id : statements.keySet())
+            {
+               writeQueryAnalyzerFile(id);
+            }
+         }
          writeCSS();
       }
       catch (Exception e)
@@ -1396,6 +1590,7 @@ public class LogAnalyzer
    {
       private int processId;
       private String timestamp;
+      private String database;
       private Long time;
       private int transactionId;
       private String fullStatement;
@@ -1413,12 +1608,33 @@ public class LogAnalyzer
          int bracket1End = s.indexOf("]");
          int bracket2Start = s.indexOf("[", bracket1End + 1);
          int bracket2End = s.indexOf("]", bracket1End + 1);
+         int bracket3Start = 0;
+         int bracket3End = 0;
+
+         if (multidb)
+         {
+            bracket3Start = s.indexOf("[", bracket2End + 1);
+            bracket3End = s.indexOf("]", bracket2End + 1);
+         }
 
          this.processId = Integer.valueOf(s.substring(0, bracket1Start).trim());
          this.timestamp = s.substring(bracket1Start + 1, bracket1End);
          this.time = null;
-         this.transactionId = Integer.valueOf(s.substring(bracket2Start + 1, bracket2End));
-         this.fullStatement = s.substring(bracket2End + 2);
+
+         if (!multidb)
+         {
+            this.database = DEFAULT;
+            this.transactionId = Integer.valueOf(s.substring(bracket2Start + 1, bracket2End));
+            this.fullStatement = s.substring(bracket2End + 2);
+         }
+         else
+         {
+            this.database = s.substring(bracket2Start + 1, bracket2End);
+            if (this.database == null)
+               this.database = "";
+            this.transactionId = Integer.valueOf(s.substring(bracket3Start + 1, bracket3End));
+            this.fullStatement = s.substring(bracket3End + 2);
+         }
 
          this.statement = null;
          this.prepared = false;
@@ -1488,6 +1704,11 @@ public class LogAnalyzer
          }
 
          return time.longValue();
+      }
+
+      String getDatabase()
+      {
+         return database;
       }
 
       int getTransactionId()

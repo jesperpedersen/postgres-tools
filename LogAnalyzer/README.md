@@ -76,6 +76,16 @@ The date format definition
 
 Default is ```yyyy-MM-dd HH:mm:ss.SSS```
 
+#### multidb
+
+This option enables the generation of multiple sub-reports since 1 or more databases are accessed.
+
+The log must be formatted using
+
+```
+log_line_prefix = '%p [%m] [%d] [%x] '
+```
+
 ### Run
 
 ```bash
