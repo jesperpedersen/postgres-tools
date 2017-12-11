@@ -949,7 +949,7 @@ public class QueryAnalyzer
             }
          }
 
-         if (indexData.size() > 0)
+         if (indexData != null && indexData.size() > 0)
          {
             l.add("<h3>" + tableName + "</h3>");
             l.add("<table>");
@@ -1837,22 +1837,32 @@ public class QueryAnalyzer
             {
                try
                {
-                  Object data = getData(c, currentColumn);
-                  Integer type = getType(c, currentColumn, query);
+                  Object data = null;
+                  Integer type = null;
 
-                  if (data == null)
+                  data = getData(c, currentColumn);
+                  type = getType(c, currentColumn, query);
+
+                  if (type != null)
                   {
-                     data = getDefaultValue(type);
                      if (data == null)
-                        System.out.println("Unsupported type " + type + " for " + query);
-                     if (needsQuotes(data))
-                        data = "'" + data + "'";
+                     {
+                        data = getDefaultValue(type);
+                        if (data == null)
+                           System.out.println("Unsupported type " + type + " for " + query);
+                        if (needsQuotes(data))
+                           data = "'" + data + "'";
+                     }
+
+                     values.add(data.toString());
+                     types.add(type);
+
+                     this.getBuffer().append(data);
                   }
-
-                  values.add(data.toString());
-                  types.add(type);
-
-                  this.getBuffer().append(data);
+                  else
+                  {
+                     System.out.println("Unsupported column/type in " + query);
+                  }
                }
                catch (Exception e)
                {
@@ -2910,6 +2920,10 @@ public class QueryAnalyzer
       Map<String, Integer> tableData = new TreeMap<>();
       Map<String, Integer> columnSize = new TreeMap<>();
       ResultSet rs = null;
+
+      if (tableName.contains("."))
+         tableName = tableName.substring(tableName.lastIndexOf(".") + 1);
+
       try
       {
          DatabaseMetaData dmd = c.getMetaData();
