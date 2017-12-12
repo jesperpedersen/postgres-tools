@@ -71,6 +71,7 @@ import net.sf.jsqlparser.statement.update.Update;
 import net.sf.jsqlparser.util.TablesNamesFinder;
 import net.sf.jsqlparser.util.deparser.ExpressionDeParser;
 import net.sf.jsqlparser.util.deparser.SelectDeParser;
+import net.sf.jsqlparser.util.deparser.StatementDeParser;
 
 /**
  * Query analyzer
@@ -2168,7 +2169,8 @@ public class QueryAnalyzer
             select.setSelectBody(plainSelect);
          }
 
-         select.getSelectBody().accept(deparser);
+         StatementDeParser sdp = new StatementDeParser(expressionDeParser, deparser, buffer);
+         select.accept(sdp);
 
          for (String tableName : extraIndexes.keySet())
          {
