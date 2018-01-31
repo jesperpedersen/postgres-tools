@@ -93,6 +93,9 @@ public class ShrinkLog
    /** Log line type: NOTICE */
    private static final int NOTICE = 14;
 
+   /** Log line type: HINT */
+   private static final int HINT = 15;
+
    /** The configuration */
    private static Properties configuration;
 
@@ -242,6 +245,10 @@ public class ShrinkLog
          else if ("DEBUG5".equals(type))
          {
             return DEBUG5;
+         }
+         else if ("HINT".equals(type))
+         {
+            return HINT;
          }
          else
          {
