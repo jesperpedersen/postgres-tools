@@ -1340,8 +1340,8 @@ public class LogAnalyzer
                   List<String> ls = rd.get(le.getProcessId());
                   if (ls == null)
                      ls = new ArrayList<>();
-                  if (s != null)
-                     ls.add(s);
+                  if (str != null)
+                     ls.add(str);
                   rd.put(le.getProcessId(), ls);
                   rawData.put(le.getDatabase(), rd);
                }
