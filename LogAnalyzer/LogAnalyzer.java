@@ -371,22 +371,52 @@ public class LogAnalyzer
          }
       }
 
-      int qNumber = 1;
+      int select = 1;
+      int update = 1;
+      int insert = 1;
+      int delete = 1;
+      int padding = (int)Math.log10(statements.get(id).size()) + 1;
       Map<String, List<QuerySample>> qs = querySamples.get(id);
       for (String sql : qs.keySet())
       {
+         boolean include = true;
          String qName = multidb ? id + "-" : "";
-         qName += "q" + qNumber;
+         String upper = sql.toUpperCase();
+         if (upper.startsWith("SELECT") || upper.startsWith("WITH"))
+         {
+            qName += "query.select." + String.format("%0" + padding + "d", select);
+            select++;
+         }
+         else if (upper.startsWith("UPDATE"))
+         {
+            qName += "query.update." + String.format("%0" + padding + "d", update);
+            update++;
+         }
+         else if (upper.startsWith("INSERT"))
+         {
+            qName += "query.insert." + String.format("%0" + padding + "d", insert);
+            insert++;
+         }
+         else if (upper.startsWith("DELETE"))
+         {
+            qName += "query.delete." + String.format("%0" + padding + "d", delete);
+            delete++;
+         }
+         else
+         {
+            include = false;
+         }
 
-         Map<String, String> qn = queryNames.get(id);
-         if (qn == null)
-            qn = new TreeMap<>();
-         qn.put(sql, qName);
-         queryNames.put(id, qn);
+         if (include)
+         {
+            Map<String, String> qn = queryNames.get(id);
+            if (qn == null)
+               qn = new TreeMap<>();
+            qn.put(sql, qName);
+            queryNames.put(id, qn);
 
-         writeQueryReport(id, sql, qName);
-
-         qNumber++;
+            writeQueryReport(id, sql, qName);
+         }
       }
 
       l.add("<h2>Overview</h2>");
@@ -974,13 +1004,6 @@ public class LogAnalyzer
    {
       List<String> l = new ArrayList<>();
       List<String> queries = new ArrayList<>();
-
-      int select = 1;
-      int update = 1;
-      int insert = 1;
-      int delete = 1;
-
-      int padding = (int)Math.log10(statements.get(id).size()) + 1;
       
       l.add("# https://github.com/jesperpedersen/postgres-tools/tree/master/QueryAnalyzer");
       l.add("host=localhost # ChangeMe");
@@ -991,27 +1014,9 @@ public class LogAnalyzer
 
       for (String stmt : statements.get(id).keySet())
       {
-         String upper = stmt.toUpperCase();
-         if (upper.startsWith("SELECT") || upper.startsWith("WITH"))
-         {
-            queries.add("query.select." + String.format("%0" + padding + "d", select) + "=" + stmt);
-            select++;
-         }
-         else if (upper.startsWith("UPDATE"))
-         {
-            queries.add("query.update." + String.format("%0" + padding + "d", update) + "=" + stmt);
-            update++;
-         }
-         else if (upper.startsWith("INSERT"))
-         {
-            queries.add("query.insert." + String.format("%0" + padding + "d", insert) + "=" + stmt);
-            insert++;
-         }
-         else if (upper.startsWith("DELETE"))
-         {
-            queries.add("query.delete." + String.format("%0" + padding + "d", delete) + "=" + stmt);
-            delete++;
-         }
+         String key = queryNames.get(id).get(stmt);
+         if (key != null)
+            queries.add(key + "=" + stmt);
       }
 
       Collections.sort(queries);
