@@ -3004,6 +3004,8 @@ public class QueryAnalyzer
             qids = new TreeSet<>();
          qids.add(queryId);
          inserts.put(insert.getTable().getName().toLowerCase(), qids);
+
+         return null;
       }
 
       System.out.println("Unsupported query: " + s);
