@@ -3989,6 +3989,13 @@ public class QueryAnalyzer
    private static void setup() throws Exception
    {
       File report = new File("report");
+      if (report.exists())
+      {
+         Files.walk(Paths.get("report"))
+            .sorted(Comparator.reverseOrder())
+            .map(Path::toFile)
+            .forEach(File::delete);
+      }
       report.mkdir();
    }
 

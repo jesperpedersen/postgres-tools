@@ -35,6 +35,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -1539,6 +1540,13 @@ public class LogAnalyzer
    private static void setup() throws Exception
    {
       File report = new File("report");
+      if (report.exists())
+      {
+         Files.walk(Paths.get("report"))
+            .sorted(Comparator.reverseOrder())
+            .map(Path::toFile)
+            .forEach(File::delete);
+      }
       report.mkdir();
 
       Files.copy(Paths.get("dygraph.min.js"), Paths.get("report", "dygraph.min.js"), StandardCopyOption.REPLACE_EXISTING);
