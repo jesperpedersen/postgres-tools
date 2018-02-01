@@ -753,36 +753,18 @@ public class QueryAnalyzer
                                    List<String> values,
                                    Connection c) throws Exception
    {
-      int number = -1;
+      boolean replay = false;
 
       // Replay integration
       if (queryId.startsWith("query.select") ||
           queryId.startsWith("query.update") ||
           queryId.startsWith("query.delete"))
       {
-         int factor = 100;
-         String ns = queryId.substring(queryId.lastIndexOf(".") + 1);
-         while (ns.charAt(0) == '0')
-         {
-            ns = ns.substring(1);
-            if (ns.charAt(0) == '0')
-               factor *= 10;
-         }
+         replay = true;
 
-         number = Integer.valueOf(ns);
          boolean commit = true;
-         if (queryId.startsWith("query.select"))
+         if (queryId.startsWith("query.update") || queryId.startsWith("query.delete"))
          {
-            number += 2 * factor;
-         }
-         else if (queryId.startsWith("query.update"))
-         {
-            number += 3 * factor;
-            commit = false;
-         }
-         else
-         {
-            number += 1 * factor;
             commit = false;
          }
 
@@ -844,7 +826,7 @@ public class QueryAnalyzer
          cli.add("");
          cli.add("");
 
-         writeFile(Paths.get("report", number + ".cli"), cli);
+         writeFile(Paths.get("report", queryId + ".cli"), cli);
       }
 
       List<String> l = new ArrayList<>();
@@ -875,12 +857,12 @@ public class QueryAnalyzer
          l.add("</pre>");
       }
 
-      if (number != -1)
+      if (replay)
       {
          l.add("<p>");
          l.add("<b>Replay:</b>");
          l.add("<p>");
-         l.add("<a href=\"" + number + ".cli\">File</a>");
+         l.add("<a href=\"" + queryId + ".cli\">File</a>");
       }
 
       if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("issues", "true"))) && issues.containsKey(queryId))
