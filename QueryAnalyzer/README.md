@@ -130,6 +130,7 @@ Overview reports
 * Indexes - Show index usage, and unused indexes
 * HOT - Shows column status: Black = Not updated, Green = Updated but not part of an index, Red = Updated and part of an index
 * Times - CSV file with planning and execution times
+* Suggestions - SQL with possible optimizations, as suggested in the 'Tables' report
 * Environment - Shows the PostgreSQL environment
 
 Each query report shows

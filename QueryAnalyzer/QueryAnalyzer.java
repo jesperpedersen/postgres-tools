@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2017 Jesper Pedersen <jesper.pedersen@comcast.net>
+ * Copyright (c) 2018 Jesper Pedersen <jesper.pedersen@comcast.net>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -211,6 +212,12 @@ public class QueryAnalyzer
    /** Issues         Query   Issues */
    private static Map<String, List<Issue>> issues = new TreeMap<>();
 
+   /** Suggestions    Table   SQL */
+   private static Map<String, List<String>> sql = new TreeMap<>();
+
+   /** Constraints    Name */
+   private static Set<String> constraints = new TreeSet<>();
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -271,6 +278,7 @@ public class QueryAnalyzer
       l.add("<li><a href=\"indexes.html\">Indexes</a></li>");
       l.add("<li><a href=\"hot.html\">HOT</a></li>");
       l.add("<li><a href=\"result.csv\">Times</a></li>");
+      l.add("<li><a href=\"suggestions.html\">Suggestions</a></li>");
       l.add("<li><a href=\"environment.html\">Environment</a></li>");
       l.add("</ul>");
       l.add("<p>");
@@ -527,6 +535,28 @@ public class QueryAnalyzer
                      l.add("<td>" + sb.toString() + "</td>");
                   }
                }
+
+               if (isPrimaryKey(tableName, idx.getValue()))
+               {
+                  boolean asComment = validPrimaryKeyName(idx.getKey(), tableName, idx.getValue());
+                  if (!asComment)
+                     asComment = isForeignKeyExport(tableName, idx.getValue());
+
+                  dropPrimaryKey(tableName, idx.getKey(), idx.getValue(), asComment);
+                  createPrimaryKey(tableName, idx.getValue(), asComment);
+               }
+               else if (isUnique(idx.getKey()))
+               {
+                  boolean asComment = validUniqueIndexName(idx.getKey(), tableName, idx.getValue());
+                  dropUniqueIndex(tableName, idx.getKey(), idx.getValue(), asComment);
+                  createUniqueIndex(tableName, idx.getValue(), asComment);
+               }
+               else
+               {
+                  dropIndex(tableName, idx.getKey(), idx.getValue(), false,
+                            validIndexName(idx.getKey(), tableName, idx.getValue()));
+               }
+
                l.add("</tr>");
             }
             l.add("</table>");
@@ -1168,6 +1198,7 @@ public class QueryAnalyzer
    private static void writeIndexes() throws Exception
    {
       List<String> l = new ArrayList<>();
+      Set<String> suggested = new TreeSet<>();
 
       l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
       l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
@@ -1209,6 +1240,14 @@ public class QueryAnalyzer
          l.add(entry.getValue().toString());
          l.add("</td>");
          l.add("</tr>");
+
+         List<String> cols = (indexes.get(table)).get(entry.getKey());
+         boolean btree = isBTreeIndex(table, cols);
+         String idxName = getIndexName(table, cols);
+         suggested.add(idxName);
+
+         if (!isPrimaryKey(table, cols))
+            createIndex(table, idxName, btree, cols, true, true);
       }
       l.add("</table>");
 
@@ -1246,6 +1285,11 @@ public class QueryAnalyzer
             l.add(table);
             l.add("</td>");
             l.add("</tr>");
+
+            List<String> cols = (indexes.get(table)).get(unused);
+            String idxName = getIndexName(table, cols);
+            dropIndex(table, idxName, cols, true,
+                      suggested.contains(idxName) || isPrimaryKey(table, cols) || isForeignKeyImport(table, cols));
          }
          l.add("</table>");
       }
@@ -1309,6 +1353,519 @@ public class QueryAnalyzer
       l.add("</html>");
 
       writeFile(Paths.get("report", "environment.html"), l);
+   }
+
+   /**
+    * Write suggestions.html
+    */
+   private static void writeSuggestions() throws Exception
+   {
+      List<String> file = new ArrayList<>();
+      List<String> l = new ArrayList<>();
+
+      l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
+      l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+      l.add("");
+      l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
+      l.add("<head>");
+      l.add("  <title>Suggestions</title>");
+      l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+      l.add("</head>");
+      l.add("<body>");
+      l.add("<h1>Suggestions</h1>");
+      l.add("");
+      l.add("File: <a href=\"suggestions.sql\">SQL</a>");
+
+      l.add("<h2>Content</h2>");
+      l.add("<pre>");
+
+      for (Map.Entry<String, List<String>> entry : sql.entrySet())
+      {
+         l.add("-- " + entry.getKey());
+         l.addAll(entry.getValue());
+         l.add("");
+
+         file.add("-- " + entry.getKey());
+         file.addAll(entry.getValue());
+         file.add("");
+      }
+
+      l.add("ANALYZE;");
+      file.add("ANALYZE;");
+
+      l.add("</pre>");
+
+      l.add("<p>");
+      l.add("<a href=\"index.html\">Back</a>");
+
+      l.add("</body>");
+      l.add("</html>");
+
+      writeFile(Paths.get("report", "suggestions.html"), l);
+      writeFile(Paths.get("report", "suggestions.sql"), file);
+   }
+
+   /**
+    * Is primary key
+    * @param tableName The table name
+    * @param columns The columns
+    * @return True if primary key, otherwise false
+    */
+   private static boolean isPrimaryKey(String tableName, List<String> columns)
+   {
+      List<String> l = primaryKeys.get(tableName);
+      if (l != null)
+      {
+         return l.equals(columns);
+      }
+
+      return false;
+   }
+
+   /**
+    * Get primary key name
+    * @param tableName The table name
+    * @param columns The columns
+    * @return The primary key name
+    */
+   private static String getPrimaryKeyName(String tableName, List<String> columns)
+   {
+      StringBuilder indexName = new StringBuilder();
+      indexName.append("pk_");
+      indexName.append(tableName);
+      indexName.append('_');
+      for (int i = 0; i < columns.size(); i++)
+      {
+         indexName.append(columns.get(i));
+         if (i < columns.size() - 1)
+            indexName.append('_');
+      }
+      return indexName.toString();
+   }
+
+   /**
+    * Valid primary key name
+    * @param idxName The index name
+    * @param tableName The table name
+    * @param columns The columns
+    * @return True if valid, otherwise false
+    */
+   private static boolean validPrimaryKeyName(String idxName, String tableName, List<String> columns)
+   {
+      return idxName.equals(getPrimaryKeyName(tableName, columns));
+   }
+
+   /**
+    * Create PRIMARY KEY
+    * @param tableName The table name
+    * @param columns The index columns
+    * @param asComment Is this a comment
+    */
+   private static void createPrimaryKey(String tableName, List<String> columns, boolean asComment)
+   {
+      if (!asComment || debug)
+      {
+         List<String> l = sql.get(tableName);
+         if (l == null)
+            l = new ArrayList<>();
+
+         String idxName = getPrimaryKeyName(tableName, columns);
+
+         StringBuilder sb = new StringBuilder();
+         if (asComment)
+            sb = sb.append("-- ");
+         sb = sb.append("CREATE UNIQUE INDEX ");
+         sb = sb.append(idxName);
+         sb = sb.append(" ON ");
+         sb = sb.append(tableName);
+         sb = sb.append(" (");
+         for (int i = 0; i < columns.size(); i++)
+         {
+            sb = sb.append(columns.get(i));
+            if (i < columns.size() - 1)
+               sb = sb.append(", ");
+         }
+         sb = sb.append(");");
+         l.add(sb.toString());
+
+         sb = new StringBuilder();
+         if (asComment)
+            sb = sb.append("-- ");
+         sb = sb.append("ALTER TABLE ");
+         sb = sb.append(tableName);
+         sb = sb.append(" ADD PRIMARY KEY USING INDEX ");
+         sb = sb.append(idxName);
+         sb = sb.append(";");
+         l.add(sb.toString());
+
+         sql.put(tableName, l);
+      }
+   }
+
+   /**
+    * Drop PRIMARY KEY
+    * @param tableName The table name
+    * @param idxName The index name
+    * @param columns The index columns
+    * @param asComment Is this a comment
+    */
+   private static void dropPrimaryKey(String tableName, String idxName, List<String> columns,
+                                      boolean asComment)
+   {
+      if (!asComment || debug)
+      {
+         List<String> l = sql.get(tableName);
+         if (l == null)
+            l = new ArrayList<>();
+
+         StringBuilder sb = new StringBuilder();
+         if (asComment)
+            sb = sb.append("-- ");
+         sb = sb.append("ALTER TABLE ");
+         sb = sb.append(tableName);
+         sb = sb.append(" DROP CONSTRAINT ");
+         sb = sb.append(idxName);
+         sb = sb.append(";");
+         if (!asComment)
+         {
+            sb = sb.append(" -- ");
+            sb = sb.append(columns.toString());
+         }
+         l.add(sb.toString());
+
+         sql.put(tableName, l);
+      }
+   }
+
+   /**
+    * Is unique
+    * @param name The name
+    * @return True if unique, otherwise false
+    */
+   private static boolean isUnique(String name)
+   {
+      return constraints.contains(name);
+   }
+
+   /**
+    * Get unique index name
+    * @param tableName The table name
+    * @param columns The columns
+    * @return The unique index name
+    */
+   private static String getUniqueIndexName(String tableName, List<String> columns)
+   {
+      StringBuilder indexName = new StringBuilder();
+      indexName.append("uidx_");
+      indexName.append(tableName);
+      indexName.append('_');
+      for (int i = 0; i < columns.size(); i++)
+      {
+         indexName.append(columns.get(i));
+         if (i < columns.size() - 1)
+            indexName.append('_');
+      }
+      return indexName.toString();
+   }
+
+   /**
+    * Valid unique index name
+    * @param idxName The index name
+    * @param tableName The table name
+    * @param columns The columns
+    * @return True if valid, otherwise false
+    */
+   private static boolean validUniqueIndexName(String idxName, String tableName, List<String> columns)
+   {
+      return idxName.equals(getUniqueIndexName(tableName, columns));
+   }
+
+   /**
+    * Create UNIQUE INDEX
+    * @param tableName The table name
+    * @param columns The index columns
+    * @param asComment Is this a comment
+    */
+   private static void createUniqueIndex(String tableName, List<String> columns, boolean asComment)
+   {
+      if (!asComment || debug)
+      {
+         List<String> l = sql.get(tableName);
+         if (l == null)
+            l = new ArrayList<>();
+
+         String idxName = getUniqueIndexName(tableName, columns);
+
+         StringBuilder sb = new StringBuilder();
+         if (asComment)
+            sb = sb.append("-- ");
+         sb = sb.append("CREATE UNIQUE INDEX ");
+         sb = sb.append(idxName);
+         sb = sb.append(" ON ");
+         sb = sb.append(tableName);
+         sb = sb.append(" (");
+         for (int i = 0; i < columns.size(); i++)
+         {
+            sb = sb.append(columns.get(i));
+            if (i < columns.size() - 1)
+               sb = sb.append(", ");
+         }
+         sb = sb.append(");");
+         l.add(sb.toString());
+
+         sb = new StringBuilder();
+         if (asComment)
+            sb = sb.append("-- ");
+         sb = sb.append("ALTER TABLE ");
+         sb = sb.append(tableName);
+         sb = sb.append(" ADD UNIQUE USING INDEX ");
+         sb = sb.append(idxName);
+         sb = sb.append(";");
+         l.add(sb.toString());
+
+         sql.put(tableName, l);
+      }
+   }
+
+   /**
+    * Drop UNIQUE INDEX
+    * @param tableName The table name
+    * @param idxName The index name
+    * @param columns The index columns
+    * @param asComment Is this a comment
+    */
+   private static void dropUniqueIndex(String tableName, String idxName, List<String> columns,
+                                       boolean asComment)
+   {
+      if (!asComment || debug)
+      {
+         List<String> l = sql.get(tableName);
+         if (l == null)
+            l = new ArrayList<>();
+
+         StringBuilder sb = new StringBuilder();
+         if (asComment)
+            sb = sb.append("-- ");
+         sb = sb.append("ALTER TABLE ");
+         sb = sb.append(tableName);
+         sb = sb.append(" DROP CONSTRAINT ");
+         sb = sb.append(idxName);
+         sb = sb.append(";");
+         if (!asComment)
+         {
+            sb = sb.append(" -- ");
+            sb = sb.append(columns.toString());
+         }
+         l.add(sb.toString());
+
+         sql.put(tableName, l);
+      }
+   }
+
+   /**
+    * Has index
+    * @param tableName The table name
+    * @param idxName The index name
+    * @param columns The columns
+    * @return True if index exists, otherwise false
+    */
+   private static boolean hasIndex(String tableName, String idxName, List<String> columns)
+   {
+      Map<String, List<String>> m = indexes.get(tableName);
+      if (m != null)
+      {
+         List<String> cols = m.get(idxName);
+         if (cols != null)
+         {
+            return cols.equals(columns);
+         }
+      }
+
+      return false;
+   }
+
+   /**
+    * Is BTREE index
+    * @param tableName The table name
+    * @param columns The columns
+    * @return True if BTREE, otherwise false (HASH)
+    */
+   private static boolean isBTreeIndex(String tableName, List<String> columns)
+   {
+      if (columns.size() == 1)
+      {
+         Integer type = tables.get(tableName).get(columns.get(0));
+         if (type == Types.CHAR || type == Types.LONGVARCHAR || type == Types.VARCHAR)
+         {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+   /**
+    * Get index name
+    * @param tableName The table name
+    * @param columns The columns
+    * @return The index name
+    */
+   private static String getIndexName(String tableName, List<String> columns)
+   {
+      StringBuilder indexName = new StringBuilder();
+      indexName.append("idx_");
+      indexName.append(tableName);
+      indexName.append('_');
+      for (int i = 0; i < columns.size(); i++)
+      {
+         indexName.append(columns.get(i));
+         if (i < columns.size() - 1)
+            indexName.append('_');
+      }
+      return indexName.toString();
+   }
+
+   /**
+    * Valid index name
+    * @param idxName The index name
+    * @param tableName The table name
+    * @param columns The columns
+    * @return True if valid, otherwise false
+    */
+   private static boolean validIndexName(String idxName, String tableName, List<String> columns)
+   {
+      return idxName.equals(getIndexName(tableName, columns));
+   }
+
+   /**
+    * CREATE INDEX
+    * @param tableName The table name
+    * @param idxName The index name
+    * @param btree Is the index a BTREE, or HASH
+    * @param columns The columns
+    * @param ifNotExists IF NOT EXISTS
+    * @param asComment Is this a comment
+    */
+   private static void createIndex(String tableName, String idxName, boolean btree, List<String> columns,
+                                   boolean ifNotExists, boolean asComment)
+   {
+      if (!asComment || debug)
+      {
+         List<String> l = sql.get(tableName);
+         if (l == null)
+            l = new ArrayList<>();
+
+         StringBuilder sb = new StringBuilder();
+         if (asComment)
+            sb = sb.append("-- ");
+         sb = sb.append("CREATE INDEX ");
+         if (ifNotExists)
+            sb = sb.append("IF NOT EXISTS ");
+         sb = sb.append(idxName);
+         sb = sb.append(" ON ");
+         sb = sb.append(tableName);
+         sb = sb.append(" USING ");
+         if (btree)
+         {
+            sb = sb.append("BTREE");
+         }
+         else
+         {
+            sb = sb.append("HASH");
+         }
+         sb = sb.append(" (");
+         for (int i = 0; i < columns.size(); i++)
+         {
+            sb = sb.append(columns.get(i));
+            if (i < columns.size() - 1)
+               sb = sb.append(", ");
+         }
+         sb = sb.append(")");
+         sb = sb.append(";");
+         l.add(sb.toString());
+
+         sql.put(tableName, l);
+      }
+   }
+
+   /**
+    * DROP INDEX
+    * @param tableName The table name
+    * @param idxName The index name
+    * @param columns The index columns
+    * @param ifExists IF EXISTS
+    * @param asComment Is this a comment
+    */
+   private static void dropIndex(String tableName, String idxName, List<String> columns,
+                                 boolean ifExists, boolean asComment)
+   {
+      if (!asComment || debug)
+      {
+         List<String> l = sql.get(tableName);
+         if (l == null)
+            l = new ArrayList<>();
+
+         StringBuilder sb = new StringBuilder();
+         if (asComment)
+            sb = sb.append("-- ");
+         sb = sb.append("DROP INDEX ");
+         if (ifExists)
+            sb = sb.append("IF EXISTS ");
+         sb = sb.append(idxName);
+         sb = sb.append(";");
+         if (!asComment)
+         {
+            sb = sb.append(" -- ");
+            sb = sb.append(columns.toString());
+         }
+         l.add(sb.toString());
+
+         sql.put(tableName, l);
+      }
+   }
+
+   /**
+    * Is foreign key (EXPORT)
+    * @param tableName The table name
+    * @param columns The columns
+    * @return True if foreign key, otherwise false
+    */
+   private static boolean isForeignKeyExport(String tableName, List<String> columns)
+   {
+      Map<String, Map<String, String>> e = exports.get(tableName);
+      if (e != null)
+      {
+         for (Map<String, String> entry : e.values())
+         {
+            List<String> pk = Arrays.asList(entry.get("PKCOLUMN_NAME"));
+            if (columns.equals(pk))
+               return true;
+         }
+      }
+
+      return false;
+   }
+
+   /**
+    * Is foreign key (IMPORT)
+    * @param tableName The table name
+    * @param columns The columns
+    * @return True if foreign key, otherwise false
+    */
+   private static boolean isForeignKeyImport(String tableName, List<String> columns)
+   {
+      Map<String, Map<String, String>> e = imports.get(tableName);
+      if (e != null)
+      {
+         for (Map<String, String> entry : e.values())
+         {
+            List<String> pk = Arrays.asList(entry.get("FKCOLUMN_NAME"));
+            if (columns.equals(pk))
+               return true;
+         }
+      }
+
+      return false;
    }
 
    /**
@@ -1770,6 +2327,7 @@ public class QueryAnalyzer
       }
 
       int idx = 1;
+      Set<String> prefixes = new TreeSet<>();
 
       for (Integer count : counts.descendingKeySet())
       {
@@ -1796,6 +2354,7 @@ public class QueryAnalyzer
                if (newIndex.size() > 0 && !suggested.contains(newIndex))
                {
                   boolean hot = true;
+                  boolean btree = true;
 
                   if (tableSet != null)
                   {
@@ -1806,41 +2365,25 @@ public class QueryAnalyzer
                      }
                   }
 
-                  StringBuilder indexName = new StringBuilder();
-                  if (!hot)
-                     indexName.append("<div style=\"color : " + COLOR_RED + "\">");
-                  indexName.append("idx_");
-                  indexName.append(tableName);
-                  indexName.append('_');
-                  for (int i = 0; i < newIndex.size(); i++)
-                  {
-                     indexName.append(newIndex.get(i));
-                     if (i < newIndex.size() - 1)
-                        indexName.append('_');
-                  }
-                  if (!hot)
-                     indexName.append("</div>");
+                  String indexName = getIndexName(tableName, newIndex);
 
                   result.add("<tr>");
                   result.add("<td>IDX" + idx + "</td>");
-                  result.add("<td>" + indexName.toString() + "</td>");
+                  result.add("<td>" +
+                             (hot ? "" : "<div style=\"color : " + COLOR_RED + "\">") +
+                             indexName +
+                             (hot ? "" : "</div>") +
+                             "</td>");
                   result.add("<td>" + newIndex + "</td>");
 
-                  if (newIndex.size() > 1)
+                  btree = isBTreeIndex(tableName, newIndex);
+                  if (btree)
                   {
                      result.add("<td>btree</td>");
                   }
                   else
                   {
-                     Integer type = tables.get(tableName).get(newIndex.get(0));
-                     if (type == Types.CHAR || type == Types.LONGVARCHAR || type == Types.VARCHAR)
-                     {
-                        result.add("<td>hash</td>");
-                     }
-                     else
-                     {
-                        result.add("<td>btree</td>");
-                     }
+                     result.add("<td>hash</td>");
                   }
 
                   if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
@@ -1853,8 +2396,17 @@ public class QueryAnalyzer
                      result.add("<td>" + sb.toString() + "</td>");
                   }
 
+                  if (!isPrimaryKey(tableName, newIndex))
+                  {
+                     boolean asComment = prefixes.contains(newIndex.get(0));
+                     if (!asComment)
+                        asComment = hasIndex(tableName, indexName, newIndex);
+                     createIndex(tableName, indexName, btree, newIndex, false, asComment);
+                  }
+
                   result.add("</tr>");
                   suggested.add(newIndex);
+                  prefixes.add(newIndex.get(0));
                   idx++;
                }
             }
@@ -3376,6 +3928,28 @@ public class QueryAnalyzer
    }
 
    /**
+    * Startup
+    * @param c The connection
+    */
+   private static void startup(Connection c) throws Exception
+   {
+      Statement stmt = c.createStatement();
+      stmt.execute("ANALYZE");
+      stmt.close();
+
+      stmt = c.createStatement();
+      stmt.execute("SELECT conname FROM pg_constraint");
+      ResultSet rs = stmt.getResultSet();
+      while (rs.next())
+      {
+         String name = rs.getString(1);
+         constraints.add(name);
+      }
+      rs.close();
+      stmt.close();
+   }
+
+   /**
     * Read the configuration (queryanalyzer.properties)
     * @param config The configuration
     */
@@ -3489,9 +4063,7 @@ public class QueryAnalyzer
          
          c = DriverManager.getConnection(url, user, password);
 
-         Statement stmt = c.createStatement();
-         stmt.execute("ANALYZE");
-         stmt.close();
+         startup(c);
 
          SortedSet<String> queries = processQueries(c);
          writeIndex(queries);
@@ -3500,6 +4072,7 @@ public class QueryAnalyzer
          writeHOT();
          writeIndexes();
          writeEnvironment(c);
+         writeSuggestions();
       }
       catch (Exception e)
       {
