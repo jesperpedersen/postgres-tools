@@ -41,6 +41,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -127,6 +128,9 @@ public class Replay
    /** Log line type: NOTICE */
    private static final int NOTICE = 14;
 
+   /** Log line type: HINT */
+   private static final int HINT = 15;
+
    /** The configuration */
    private static Properties configuration;
 
@@ -156,6 +160,12 @@ public class Replay
 
    /** XA */
    private static boolean xa = false;
+
+   /** Error */
+   private static boolean error = false;
+
+   /** Wait */
+   private static boolean wait = false;
 
    /** XADataSource */
    private static XADataSource xaDataSource = null;
@@ -259,6 +269,10 @@ public class Replay
          else if ("DEBUG5".equals(type))
          {
             return DEBUG5;
+         }
+         else if ("HINT".equals(type))
+         {
+            return HINT;
          }
          else
          {
@@ -797,6 +811,12 @@ public class Replay
 
             clientReady.await();
 
+            if (wait)
+            {
+               System.out.println("Press Enter to Start");
+               System.console().readLine();
+            }
+
             start = System.currentTimeMillis();
             clientRun.countDown();
 
@@ -816,6 +836,12 @@ public class Replay
             }
 
             Thread.sleep(2000L);
+
+            if (wait)
+            {
+               System.out.println("Press Enter to Start");
+               System.console().readLine();
+            }
 
             start = System.currentTimeMillis();
             clientRun.countDown();
@@ -847,7 +873,22 @@ public class Replay
       System.out.println("  Statements: " + statements);
       for (Client cli : clients)
       {
-         System.out.println("  " + cli.getId() + ": " + cli.getRunTime() + "/" + cli.getConnectionTime());
+         StringBuilder sb = new StringBuilder();
+         sb = sb.append("  ");
+         sb = sb.append(cli.getId());
+         sb = sb.append(": ");
+         sb = sb.append(cli.getRunTime());
+         sb = sb.append("/");
+         sb = sb.append(cli.getConnectionTime());
+         sb = sb.append("/");
+         sb = sb.append(cli.getStatements());
+         if (error)
+         {
+            sb = sb.append("/");
+            sb = sb.append(cli.getErrors());
+         }
+
+         System.out.println(sb.toString());
       }
       
       if (es != null)
@@ -869,7 +910,20 @@ public class Replay
 
       for (Client cli : clients)
       {
-         l.add(cli.getId() + "," + cli.getRunTime() + "," + cli.getConnectionTime());
+         StringBuilder sb = new StringBuilder();
+         sb = sb.append(cli.getId());
+         sb = sb.append(",");
+         sb = sb.append(cli.getRunTime());
+         sb = sb.append(",");
+         sb = sb.append(cli.getConnectionTime());
+         sb = sb.append(",");
+         sb = sb.append(cli.getStatements());
+         if (error)
+         {
+            sb = sb.append(",");
+            sb = sb.append(cli.getErrors());
+         }
+         l.add(sb.toString());
       }
 
       writeFile(Paths.get(profilename, "result.csv"), l);
@@ -1014,6 +1068,15 @@ public class Replay
    }
 
    /**
+    * Usage
+    */
+   private static void usage()
+   {
+      System.out.println("Usage: Replay -i <log_file>                      (init)");
+      System.out.println("       Replay [-r] [-s] [-x] [-e] [-w] <profile> (run)");
+   }
+
+   /**
     * Main
     * @param args The arguments
     */
@@ -1022,10 +1085,9 @@ public class Replay
       Connection c = null;
       try
       {
-         if (args.length != 1 && args.length != 2)
+         if (args.length == 0)
          {
-            System.out.println("Usage: Replay -i <log_file>            (init)");
-            System.out.println("       Replay [-r] [-s] [-x] <profile> (run)");
+            usage();
             return;
          }
 
@@ -1084,6 +1146,12 @@ public class Replay
 
          if ("-i".equals(args[0]))
          {
+            if (args.length == 1)
+            {
+               usage();
+               return;
+            }
+
             filename = args[1];
 
             profilename = filename.substring(0, filename.lastIndexOf("."));
@@ -1091,6 +1159,13 @@ public class Replay
             c = DriverManager.getConnection(url, user, password);
 
             File directory = new File(profilename);
+            if (directory.exists())
+            {
+               Files.walk(Paths.get(profilename))
+                  .sorted(Comparator.reverseOrder())
+                  .map(Path::toFile)
+                  .forEach(File::delete);
+            }
             directory.mkdirs();
 
             processLog();
@@ -1111,6 +1186,14 @@ public class Replay
                else if ("-x".equals(args[parameter]))
                {
                   xa = true;
+               }
+               else if ("-e".equals(args[parameter]))
+               {
+                  error = true;
+               }
+               else if ("-w".equals(args[parameter]))
+               {
+                  wait = true;
                }
             }
 
@@ -1174,6 +1257,9 @@ public class Replay
       /** After run */
       private long afterRun;
 
+      /** Errors */
+      private int errors;
+
       /**
        * Constructor
        */
@@ -1190,6 +1276,7 @@ public class Replay
          this.afterConnection = 0;
          this.beforeRun = 0;
          this.afterRun = 0;
+         this.errors = 0;
       }
 
       /**
@@ -1228,6 +1315,24 @@ public class Replay
          return afterRun - beforeRun;
       }
       
+      /**
+       * Get number of statements
+       * @return The value
+       */
+      int getStatements()
+      {
+         return interaction.size();
+      }
+
+      /**
+       * Get errors
+       * @return The value
+       */
+      int getErrors()
+      {
+         return errors;
+      }
+
       /**
        * Do the interaction
        */
@@ -1320,16 +1425,33 @@ public class Replay
                   if (!de.isPrepared())
                   {
                      Statement stmt = c.createStatement();
-                     if (stmt.execute(de.getStatement()) && resultSet)
+                     try
                      {
-                        ResultSet rs = stmt.getResultSet();
-                        while (rs.next())
+                        if (stmt.execute(de.getStatement()) && resultSet)
                         {
-                           // Just advance
+                           ResultSet rs = stmt.getResultSet();
+                           while (rs.next())
+                           {
+                              // Just advance
+                           }
+                           rs.close();
                         }
-                        rs.close();
                      }
-                     stmt.close();
+                     catch (Exception sqle)
+                     {
+                        if (error)
+                        {
+                           errors++;
+                        }
+                        else
+                        {
+                           throw sqle;
+                        }
+                     }
+                     finally
+                     {
+                        stmt.close();
+                     }
                   }
                   else
                   {
@@ -1423,17 +1545,33 @@ public class Replay
                         }
                      }
                      
-                     if (ps.execute() && resultSet)
+                     try
                      {
-                        ResultSet rs = ps.getResultSet();
-                        while (rs.next())
+                        if (ps.execute() && resultSet)
                         {
-                           // Just advance
+                           ResultSet rs = ps.getResultSet();
+                           while (rs.next())
+                           {
+                              // Just advance
+                           }
+                           rs.close();
                         }
-                        rs.close();
                      }
-
-                     ps.close();
+                     catch (Exception sqle)
+                     {
+                        if (error)
+                        {
+                           errors++;
+                        }
+                        else
+                        {
+                           throw sqle;
+                        }
+                     }
+                     finally
+                     {
+                        ps.close();
+                     }
                   }
                }
             }

@@ -18,8 +18,8 @@ This tool replays SQL through JDBC against PostgreSQL.
 
 ```bash
 cd /path/to/work_area
-wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlparser/1.0/jsqlparser-1.0.jar
-/path/to/javac -classpath jsqlparser-1.0.jar Replay.java
+wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlparser/1.1/jsqlparser-1.1.jar
+/path/to/javac -classpath jsqlparser-1.1.jar Replay.java
 ```
 
 ### Download the PostgreSQL JDBC driver
@@ -50,7 +50,7 @@ and do a run of the SQL statement that you want to replay.
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:jsqlparser-1.0.jar:postgresql-42.1.1.jar Replay -i postgresql.log
+/path/to/java -classpath .:jsqlparser-1.1.jar:postgresql-42.1.1.jar Replay -i postgresql.log
 ```
 
 The name of the profile is basename of the log file, e.g. ```postgresql``` in the above example.
@@ -104,7 +104,7 @@ Default is ```true```.
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:jsqlparser-1.0.jar:postgresql-42.1.1.jar Replay postgresql
+/path/to/java -classpath .:jsqlparser-1.1.jar:postgresql-42.1.1.jar Replay postgresql
 ```
 
 Options:
@@ -112,6 +112,8 @@ Options:
 * `-r`: Iterate through `ResultSet` instances
 * `-s`: Run a single client at a time
 * `-x`: Use 2-phase semantics for transaction support
+* `-e`: Allow exceptions to occur
+* `-w`: Wait for user input before starting the run
 
 ## Result
 
@@ -121,6 +123,6 @@ The result shows
 
 * The clock time
 * The number of clients used
-* The run time / connection time of each client
+* The `run time / connection time / number of statements` of each client, and ` / errors` if enabled 
 
 Futhermore, a .csv file with the results is created in the profile directory.
