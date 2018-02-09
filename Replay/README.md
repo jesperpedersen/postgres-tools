@@ -50,7 +50,7 @@ and do a run of the SQL statement that you want to replay.
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:jsqlparser-1.1.jar:postgresql-42.1.1.jar Replay -i postgresql.log
+/path/to/java -classpath .:jsqlparser-1.1.jar:postgresql-42.2.1.jar Replay -i postgresql.log
 ```
 
 The name of the profile is basename of the log file, e.g. ```postgresql``` in the above example.
@@ -58,7 +58,9 @@ The name of the profile is basename of the log file, e.g. ```postgresql``` in th
 ### Configuration
 
 The configuration of Replay is done in the ```replay.properties``` file, which supports the following
-options.
+options, as listed below.
+
+All options will be passed to the connection, so all the JDBC driver specific options are supported too.
 
 #### host
 
@@ -76,19 +78,19 @@ Default is ```5432```
 
 The name of the database.
 
-Required option.
+*Required option*.
 
 #### user
 
 The user name to connect with.
 
-Required option.
+*Required option*.
 
 #### password
 
 The password of the user.
 
-Required option.
+*Required option*.
 
 #### max_connections
 
@@ -104,7 +106,7 @@ Default is ```true```.
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:jsqlparser-1.1.jar:postgresql-42.1.1.jar Replay postgresql
+/path/to/java -classpath .:jsqlparser-1.1.jar:postgresql-42.2.1.jar Replay postgresql
 ```
 
 Options:

@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2017 Jesper Pedersen <jesper.pedersen@comcast.net>
+ * Copyright (c) 2018 Jesper Pedersen <jesper.pedersen@comcast.net>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -1034,8 +1034,7 @@ public class Replay
                configuration.getProperty("port", "5432") + "/" + configuration.getProperty("database");
          }
 
-         c = DriverManager.getConnection(url, configuration.getProperty("user"),
-                                         configuration.getProperty("password"));
+         c = DriverManager.getConnection(url, configuration);
 
          stmt = c.createStatement();
          stmt.execute("ANALYZE");
@@ -1156,7 +1155,7 @@ public class Replay
 
             profilename = filename.substring(0, filename.lastIndexOf("."));
             
-            c = DriverManager.getConnection(url, user, password);
+            c = DriverManager.getConnection(url, configuration);
 
             File directory = new File(profilename);
             if (directory.exists())
@@ -1367,8 +1366,7 @@ public class Replay
                         configuration.getProperty("port", "5432") + "/" + configuration.getProperty("database");
                   }
 
-                  c = DriverManager.getConnection(url, configuration.getProperty("user"),
-                                                  configuration.getProperty("password"));
+                  c = DriverManager.getConnection(url, configuration);
                }
             }
             catch (Exception ce)
