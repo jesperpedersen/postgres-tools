@@ -122,6 +122,9 @@ public class QueryAnalyzer
    /** The configuration */
    private static Properties configuration;
 
+   /** Is PostgreSQL 10 or higher */
+   private static boolean is10 = false;
+
    /** Plan count */
    private static int planCount;
 
@@ -1747,7 +1750,7 @@ public class QueryAnalyzer
          sb = sb.append(" ON ");
          sb = sb.append(tableName);
          sb = sb.append(" USING ");
-         if (btree)
+         if (btree || !is10)
          {
             sb = sb.append("BTREE");
          }
@@ -2359,7 +2362,7 @@ public class QueryAnalyzer
                   result.add("<td>" + newIndex + "</td>");
 
                   btree = isBTreeIndex(tableName, newIndex);
-                  if (btree)
+                  if (btree || !is10)
                   {
                      result.add("<td>btree</td>");
                   }
@@ -3928,6 +3931,29 @@ public class QueryAnalyzer
       {
          String name = rs.getString(1);
          constraints.add(name);
+      }
+      rs.close();
+      stmt.close();
+
+      stmt = c.createStatement();
+      stmt.execute("SELECT version()");
+      rs = stmt.getResultSet();
+      if (rs.next())
+      {
+         String ver = rs.getString(1);
+         int offset = ver.indexOf(" ");
+         ver = ver.substring(offset + 1, ver.indexOf(" ", offset + 1));
+         if (ver.indexOf(".") != -1)
+         {
+            ver = ver.substring(0, ver.indexOf("."));
+            if (Integer.valueOf(ver) >= 10)
+               is10 = true;
+         }
+         else
+         {
+            if (ver.startsWith("1"))
+               is10 = true;
+         }
       }
       rs.close();
       stmt.close();
