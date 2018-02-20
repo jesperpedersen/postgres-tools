@@ -119,6 +119,9 @@ public class QueryAnalyzer
    /** Issue code: Never executed */
    private static final String ISSUE_CODE_NEVER_EXECUTED = "Never executed";
 
+   /** Issue code: Disk sort */
+   private static final String ISSUE_CODE_DISK_SORT = "Disk sort";
+
    /** The configuration */
    private static Properties configuration;
 
@@ -2092,6 +2095,20 @@ public class QueryAnalyzer
                            }
                         }
                      }
+
+                     if (line.indexOf("Sort ") != -1 && line.indexOf("Disk:") != -1)
+                     {
+                        List<Issue> ls = issues.get(key);
+                        if (ls == null)
+                           ls = new ArrayList<>();
+
+                        Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_DISK_SORT, line);
+                        if (!ls.contains(is))
+                        {
+                           ls.add(is);
+                           issues.put(key, ls);
+                        }
+                     }
                   }
 
                   plans.put(key, sb.toString());
@@ -2126,6 +2143,20 @@ public class QueryAnalyzer
                            if (sb.length() > 0)
                               sb.append(" | ");
                            sb.append(line.substring(line.indexOf("->") + 3, line.indexOf("on")).trim());
+                        }
+                     }
+
+                     if (line.indexOf("Sort ") != -1 && line.indexOf("Disk:") != -1)
+                     {
+                        List<Issue> ls = issues.get(key);
+                        if (ls == null)
+                           ls = new ArrayList<>();
+
+                        Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_DISK_SORT, line);
+                        if (!ls.contains(is))
+                        {
+                           ls.add(is);
+                           issues.put(key, ls);
                         }
                      }
                   }
