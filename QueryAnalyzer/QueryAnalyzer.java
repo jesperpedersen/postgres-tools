@@ -215,6 +215,12 @@ public class QueryAnalyzer
    /** Partition map: Child   Parent */
    private static Map<String, String> partitionMap = new TreeMap<>();
 
+   /** Partition indexes: Parent Children */
+   private static Map<String, List<String>> partitionIndexes = new TreeMap<>();
+
+   /** Partition index child: Child Parent */
+   private static Map<String, String> partitionIndexChildren = new TreeMap<>();
+
    /** Issues         Query   Issues */
    private static Map<String, List<Issue>> issues = new TreeMap<>();
 
@@ -441,7 +447,6 @@ public class QueryAnalyzer
          }
          
          Map<String, List<String>> indexData = indexes.get(tableName);
-         String idxSize = getIndexSize(c, tableName);
 
          if (partition)
          {
@@ -449,13 +454,11 @@ public class QueryAnalyzer
             {
                if (!tables.containsKey(part))
                   initTable(c, part);
-
-               indexData.putAll(indexes.get(part));
             }
          }
 
          l.add("<p>");
-         l.add("<u><b>Indexes (" + idxSize + ")</b></u>");
+         l.add("<u><b>Indexes</b></u>");
          if (indexData.size() > 0)
          {
             Set<String> s = set.get(tableName);
@@ -463,6 +466,10 @@ public class QueryAnalyzer
             l.add("<table>");
             for (Map.Entry<String, List<String>> idx : indexData.entrySet())
             {
+               if (partitionIndexChildren.containsKey(idx.getKey()) &&
+                   Boolean.FALSE.equals(Boolean.valueOf(configuration.getProperty("show_partitions", "false"))))
+                  continue;
+
                l.add("<tr>");
                if (indexData.get(idx.getKey()).equals(pkInfo))
                {
@@ -486,6 +493,8 @@ public class QueryAnalyzer
                   {
                      l.add("<td><b>" + idx.getValue() + "</b></td>");
                   }
+
+                  l.add("<td><b>" + getIndexSize(c, idx.getKey()) + "</b></td>");
 
                   if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
                   {
@@ -531,6 +540,8 @@ public class QueryAnalyzer
                   {
                      l.add("<td>" + idx.getValue() + "</td>");
                   }
+
+                  l.add("<td>" + getIndexSize(c, idx.getKey()) + "</td>");
 
                   if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
                   {
@@ -966,8 +977,6 @@ public class QueryAnalyzer
             {
                if (!tables.containsKey(partition))
                   initTable(c, partition);
-
-               indexData.putAll(indexes.get(partition));
             }
          }
 
@@ -977,6 +986,10 @@ public class QueryAnalyzer
             l.add("<table>");
             for (String indexName : indexData.keySet())
             {
+               if (partitionIndexChildren.containsKey(indexName) &&
+                   Boolean.FALSE.equals(Boolean.valueOf(configuration.getProperty("show_partitions", "false"))))
+                  continue;
+
                l.add("<tr>");
                if (indexData.get(indexName).equals(pkInfo))
                {
@@ -1252,6 +1265,9 @@ public class QueryAnalyzer
          l.add("<table>");
          for (String unused : unusedIndexes)
          {
+            if (partitionIndexChildren.containsKey(unused))
+               continue;
+
             String table = "";
             for (Map.Entry<String, Map<String, List<String>>> entry : indexes.entrySet())
             {
@@ -1977,6 +1993,10 @@ public class QueryAnalyzer
                      if (s.indexOf("Index") != -1)
                      {
                         String idx = firstLine.substring(firstLine.indexOf("using") + 6, firstLine.indexOf(" on "));
+
+                        if (partitionIndexChildren.containsKey(idx))
+                           idx = partitionIndexChildren.get(idx);
+
                         List<String> idxList = usedIndexes.get(idx);
                         if (idxList == null)
                            idxList = new ArrayList<>();
@@ -2026,6 +2046,10 @@ public class QueryAnalyzer
                            if (s.indexOf("Index") != -1 && line.indexOf("(never executed)") == -1)
                            {
                               String idx = line.substring(line.indexOf("using") + 6, line.indexOf(" on "));
+
+                              if (partitionIndexChildren.containsKey(idx))
+                                 idx = partitionIndexChildren.get(idx);
+
                               List<String> idxList = usedIndexes.get(idx);
                               if (idxList == null)
                                  idxList = new ArrayList<>();
@@ -2061,6 +2085,10 @@ public class QueryAnalyzer
                            if (s.indexOf("Index") != -1 && line.indexOf("(never executed)") == -1)
                            {
                               String idx = line.substring(line.indexOf(" on ") + 4, line.indexOf("  ("));
+
+                              if (partitionIndexChildren.containsKey(idx))
+                                 idx = partitionIndexChildren.get(idx);
+
                               List<String> idxList = usedIndexes.get(idx);
                               if (idxList == null)
                                  idxList = new ArrayList<>();
@@ -2131,6 +2159,10 @@ public class QueryAnalyzer
                            if (s.indexOf("Index") != -1)
                            {
                               String idx = line.substring(line.indexOf("using") + 6, line.indexOf(" on "));
+
+                              if (partitionIndexChildren.containsKey(idx))
+                                 idx = partitionIndexChildren.get(idx);
+
                               List<String> idxList = usedIndexes.get(idx);
                               if (idxList == null)
                                  idxList = new ArrayList<>();
@@ -2799,12 +2831,17 @@ public class QueryAnalyzer
 
                if (isSET)
                {
-                  Set<String> s = set.get(currentTableName.toLowerCase());
+                  String tbl = currentTableName.toLowerCase();
+
+                  if (partitionMap.containsKey(tbl))
+                     tbl = partitionMap.get(tbl);
+
+                  Set<String> s = set.get(tbl);
                   if (s == null)
                      s = new TreeSet<>();
 
                   s.add(column.getColumnName().toLowerCase());
-                  set.put(currentTableName.toLowerCase(), s);
+                  set.put(tbl, s);
                }
                else
                {
@@ -3790,20 +3827,20 @@ public class QueryAnalyzer
    /**
     * Get the size of an index
     * @param c The connection
-    * @param name The name
+    * @param idx The index name
     * @return The size
     */
-   private static String getIndexSize(Connection c, String name) throws Exception
+   private static String getIndexSize(Connection c, String idx) throws Exception
    {
       String result = "";
       Statement stmt = c.createStatement();
 
-      if (partitions.containsKey(name))
+      if (partitionIndexes.containsKey(idx))
       {
          Long size = Long.valueOf(0);
-         for (String partition : partitions.get(name))
+         for (String pidx : partitionIndexes.get(idx))
          {
-            stmt.execute("SELECT pg_indexes_size(\'" + partition + "\')");
+            stmt.execute("SELECT pg_relation_size(quote_ident(\'" + pidx + "\')::text)");
             ResultSet rs = stmt.getResultSet();
             rs.next();
             size += Long.valueOf(rs.getString(1));
@@ -3818,7 +3855,7 @@ public class QueryAnalyzer
       }
       else
       {
-         stmt.execute("SELECT pg_size_pretty(pg_indexes_size(\'" + name + "\'))");
+         stmt.execute("SELECT pg_size_pretty(pg_relation_size(quote_ident(\'" + idx + "\')::text))");
          ResultSet rs = stmt.getResultSet();
          rs.next();
          result = rs.getString(1);
@@ -3940,6 +3977,42 @@ public class QueryAnalyzer
          inh.close();
 
          partitions.put(parentName, children);
+      }
+      rs.close();
+      stmt.close();
+
+      stmt = c.createStatement();
+      stmt.execute("SELECT relname,oid FROM pg_class WHERE relnamespace = 2200::oid AND relkind = \'I\'");
+      rs = stmt.getResultSet();
+      while (rs.next())
+      {
+         String parentIndexName = rs.getString(1);
+         String parentIndexOid = rs.getString(2);
+         List<String> children = new ArrayList<>();
+
+         Statement inh = c.createStatement();
+         inh.execute("SELECT inhrelid FROM pg_inherits WHERE inhparent = " + parentIndexOid + "::oid");
+         ResultSet inhRs = inh.getResultSet();
+         while (inhRs.next())
+         {
+            String childOid = inhRs.getString(1);
+
+            Statement name = c.createStatement();
+            name.execute("SELECT relname FROM pg_class WHERE oid = " + childOid + "::oid");
+            ResultSet nameRs = name.getResultSet();
+            nameRs.next();
+            String child = nameRs.getString(1);
+
+            children.add(child);
+            partitionIndexChildren.put(child, parentIndexName);
+
+            nameRs.close();
+            name.close();
+         }
+         inhRs.close();
+         inh.close();
+
+         partitionIndexes.put(parentIndexName, children);
       }
       rs.close();
       stmt.close();
