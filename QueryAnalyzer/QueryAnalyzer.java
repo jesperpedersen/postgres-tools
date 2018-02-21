@@ -1907,41 +1907,7 @@ public class QueryAnalyzer
             }
             else
             {
-               for (String table : usedTables)
-               {
-                  if (statement instanceof Select)
-                  {
-                     Set<String> ids = selects.get(table);
-                     if (ids == null)
-                        ids = new TreeSet<>();
-                     ids.add(key);
-                     selects.put(table, ids);
-                  }
-                  else if (statement instanceof Update)
-                  {
-                     Set<String> ids = updates.get(table);
-                     if (ids == null)
-                        ids = new TreeSet<>();
-                     ids.add(key);
-                     updates.put(table, ids);
-                  }
-                  else if (statement instanceof Delete)
-                  {
-                     Set<String> ids = deletes.get(table);
-                     if (ids == null)
-                        ids = new TreeSet<>();
-                     ids.add(key);
-                     deletes.put(table, ids);
-                  }
-                  else if (statement instanceof Insert)
-                  {
-                     Set<String> ids = inserts.get(table);
-                     if (ids == null)
-                        ids = new TreeSet<>();
-                     ids.add(key);
-                     inserts.put(table, ids);
-                  }
-               }
+               rewriteQuery(c, key, query, types, values);
             }
 
             if (query != null)
