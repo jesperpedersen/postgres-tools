@@ -1006,14 +1006,20 @@ public class QueryAnalyzer
             l.add("</table>");
          }
       }
-      
-      l.add("<h2>Foreign key constraints</h2>");
+
+      boolean fkcTitle = false;
       for (String tableName : usedTables)
       {
          Map<String, Map<String, String>> exp = exports.get(tableName);
          Map<String, Map<String, String>> imp = imports.get(tableName);
          if ((exp != null && exp.size() > 0) || (imp != null && imp.size() > 0))
          {
+            if (!fkcTitle)
+            {
+               l.add("<h2>Foreign key constraints</h2>");
+               fkcTitle = true;
+            }
+
             l.add("<h3>" + tableName + "</h3>");
             if (exp != null && exp.size() > 0)
             {
