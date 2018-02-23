@@ -906,10 +906,9 @@ public class QueryAnalyzer
          l.add("</ul>");
       }
 
-      l.add("<h2>Plan</h2>");
-
       if (plan != null && !"".equals(plan))
       {
+         l.add("<h2>Plan</h2>");
          l.add("<pre>");
          l.add(plan);
          l.add("</pre>");
