@@ -1972,7 +1972,8 @@ public class QueryAnalyzer
                         List<String> idxList = usedIndexes.get(idx);
                         if (idxList == null)
                            idxList = new ArrayList<>();
-                        idxList.add(key);
+                        if (!idxList.contains(key))
+                           idxList.add(key);
                         usedIndexes.put(idx, idxList);
                      }
                   }
@@ -2025,7 +2026,8 @@ public class QueryAnalyzer
                               List<String> idxList = usedIndexes.get(idx);
                               if (idxList == null)
                                  idxList = new ArrayList<>();
-                              idxList.add(key);
+                              if (!idxList.contains(key))
+                                 idxList.add(key);
                               usedIndexes.put(idx, idxList);
                            }
                         }
@@ -2064,7 +2066,8 @@ public class QueryAnalyzer
                               List<String> idxList = usedIndexes.get(idx);
                               if (idxList == null)
                                  idxList = new ArrayList<>();
-                              idxList.add(key);
+                              if (!idxList.contains(key))
+                                 idxList.add(key);
                               usedIndexes.put(idx, idxList);
                            }
                         }
@@ -2138,7 +2141,8 @@ public class QueryAnalyzer
                               List<String> idxList = usedIndexes.get(idx);
                               if (idxList == null)
                                  idxList = new ArrayList<>();
-                              idxList.add(key);
+                              if (!idxList.contains(key))
+                                 idxList.add(key);
                               usedIndexes.put(idx, idxList);
                            }
                         }
