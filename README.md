@@ -53,6 +53,10 @@ Resolve addresses using eu-addr2line in a flamegraph input file
 
 Shrink a PostgreSQL log
 
+### StraceAnalyzer
+
+A strace analyzer
+
 ## License
 
 All tools are released under the MIT license.
