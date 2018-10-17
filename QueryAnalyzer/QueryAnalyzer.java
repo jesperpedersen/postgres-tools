@@ -2001,19 +2001,34 @@ public class QueryAnalyzer
                            }
                            else
                            {
-                              sb.append("<i>");
-                              sb.append(s);
-                              sb.append("</i>");
-
-                              List<Issue> ls = issues.get(key);
-                              if (ls == null)
-                                 ls = new ArrayList<>();
-
-                              Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_NEVER_EXECUTED, line);
-                              if (!ls.contains(is))
+                              String table = line.substring(line.indexOf(" on ") + 4, line.indexOf("  ("));
+                              if (table.indexOf(".") != -1)
                               {
-                                 ls.add(is);
-                                 issues.put(key, ls);
+                                 table = table.substring(table.indexOf(".") + 1);
+                              }
+
+                              if (!partitionMap.containsKey(table))
+                              {
+                                 sb.append("<i>");
+                                 sb.append(s);
+                                 sb.append("</i>");
+
+                                 List<Issue> ls = issues.get(key);
+                                 if (ls == null)
+                                    ls = new ArrayList<>();
+
+                                 Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_NEVER_EXECUTED, line);
+                                 if (!ls.contains(is))
+                                 {
+                                    ls.add(is);
+                                    issues.put(key, ls);
+                                 }
+                              }
+                              else
+                              {
+                                 sb.append("<del>");
+                                 sb.append(s);
+                                 sb.append("</del>");
                               }
                            }
                            if (s.indexOf("Index") != -1 && line.indexOf("(never executed)") == -1)
@@ -2041,19 +2056,34 @@ public class QueryAnalyzer
                            }
                            else
                            {
-                              sb.append("<i>");
-                              sb.append(s);
-                              sb.append("</i>");
-
-                              List<Issue> ls = issues.get(key);
-                              if (ls == null)
-                                 ls = new ArrayList<>();
-
-                              Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_NEVER_EXECUTED, line);
-                              if (!ls.contains(is))
+                              String table = line.substring(line.indexOf(" on ") + 4, line.indexOf("  ("));
+                              if (table.indexOf(".") != -1)
                               {
-                                 ls.add(is);
-                                 issues.put(key, ls);
+                                 table = table.substring(table.indexOf(".") + 1);
+                              }
+
+                              if (!partitionMap.containsKey(table))
+                              {
+                                 sb.append("<i>");
+                                 sb.append(s);
+                                 sb.append("</i>");
+
+                                 List<Issue> ls = issues.get(key);
+                                 if (ls == null)
+                                    ls = new ArrayList<>();
+
+                                 Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_NEVER_EXECUTED, line);
+                                 if (!ls.contains(is))
+                                 {
+                                    ls.add(is);
+                                    issues.put(key, ls);
+                                 }
+                              }
+                              else
+                              {
+                                 sb.append("<del>");
+                                 sb.append(s);
+                                 sb.append("</del>");
                               }
                            }
                            if (s.indexOf("Index") != -1 && line.indexOf("(never executed)") == -1)
