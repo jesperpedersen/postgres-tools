@@ -63,6 +63,7 @@ import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.insert.Insert;
 import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.Limit;
+import net.sf.jsqlparser.statement.select.Offset;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectExpressionItem;
@@ -2737,8 +2738,9 @@ public class QueryAnalyzer
 
             if (plainSelect.getOffset() != null)
             {
-               plainSelect.getOffset().setOffset(0);
-               plainSelect.getOffset().setOffsetJdbcParameter(false);
+               Offset offset = new Offset();
+               offset.setOffset(0);
+               plainSelect.setOffset(offset);
             }
 
             select.setSelectBody(plainSelect);
@@ -3830,11 +3832,31 @@ public class QueryAnalyzer
       }
       else
       {
-         stmt.execute("SELECT pg_size_pretty(pg_relation_size(quote_ident(\'" + idx + "\')::text))");
-         ResultSet rs = stmt.getResultSet();
-         rs.next();
-         result = rs.getString(1);
-         rs.close();
+         ResultSet rs = null;
+         try
+         {
+            stmt.execute("SELECT pg_size_pretty(pg_relation_size(quote_ident(\'" + idx + "\')::text))");
+            rs = stmt.getResultSet();
+            rs.next();
+            result = rs.getString(1);
+         }
+         catch (Exception e)
+         {
+            result = "0";
+         }
+         finally
+         {
+            if (rs != null)
+            {
+               try
+               {
+                  rs.close();
+               }
+               catch (Exception ignore)
+               {
+               }
+            }
+         }
       }
 
       stmt.close();
