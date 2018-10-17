@@ -2935,8 +2935,8 @@ public class QueryAnalyzer
             {
                try
                {
-                  String data = getData(c, currentColumn);
-                  Integer type = getType(c, currentColumn, query);
+                  String data = getData(c, currentColumn, currentTableName);
+                  Integer type = getType(c, currentColumn, query, currentTableName);
 
                   values.add(data);
                   types.add(type);
@@ -3050,7 +3050,28 @@ public class QueryAnalyzer
     */
    private static String getData(Connection c, Column column) throws Exception
    {
-      String tableName = column.getTable().getName();
+      return getData(c, column, null);
+   }
+
+   /**
+    * Get data
+    * @param c The connection
+    * @param column The column
+    * @param table The table name
+    * @return The value
+    */
+   private static String getData(Connection c, Column column, String table) throws Exception
+   {
+      String tableName;
+
+      if (column.getTable() != null)
+      {
+         tableName = column.getTable().getName();
+      }
+      else
+      {
+         tableName = table;
+      }
 
       if (tableName != null && aliases.containsKey(tableName.toLowerCase()))
          tableName = aliases.get(tableName.toLowerCase());
@@ -3085,7 +3106,29 @@ public class QueryAnalyzer
     */
    private static Integer getType(Connection c, Column column, String query) throws Exception
    {
-      String tableName = column.getTable().getName();
+      return getType(c, column, query, null);
+   }
+
+   /**
+    * Get type
+    * @param c The connection
+    * @param column The column
+    * @param query The query
+    * @param table The table name
+    * @return The value
+    */
+   private static Integer getType(Connection c, Column column, String query, String table) throws Exception
+   {
+      String tableName;
+
+      if (column.getTable() != null)
+      {
+         tableName = column.getTable().getName();
+      }
+      else
+      {
+         tableName = table;
+      }
 
       if (tableName != null && aliases.containsKey(tableName))
          tableName = aliases.get(tableName);
