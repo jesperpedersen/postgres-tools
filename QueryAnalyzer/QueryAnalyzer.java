@@ -129,6 +129,9 @@ public class QueryAnalyzer
    /** Is PostgreSQL 10 or higher */
    private static boolean is10 = false;
 
+   /** Is PostgreSQL 11 or higher */
+   private static boolean is11 = false;
+
    /** Plan count */
    private static int planCount;
 
@@ -4185,13 +4188,27 @@ public class QueryAnalyzer
          if (ver.indexOf(".") != -1)
          {
             ver = ver.substring(0, ver.indexOf("."));
-            if (Integer.valueOf(ver) >= 10)
+            if (Integer.valueOf(ver) == 10)
+            {
                is10 = true;
+            }
+            else if (Integer.valueOf(ver) == 11)
+            {
+               is10 = true;
+               is11 = true;
+            }
          }
          else
          {
-            if (ver.startsWith("1"))
+            if (ver.startsWith("10"))
+            {
                is10 = true;
+            }
+            else if (ver.startsWith("11"))
+            {
+               is10 = true;
+               is11 = true;
+            }
          }
       }
       rs.close();
