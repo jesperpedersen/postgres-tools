@@ -141,8 +141,11 @@ public class QueryAnalyzer
    /** IN expression column */
    private static String inExpressionColumn = null;
 
-   /** Data:          Table       Column  Value */        
+   /** Data:          Table       Column  Value */
    private static Map<String, Map<String, Object>> data = new TreeMap<>();
+
+   /** Columns:       Table       Number   Name */
+   private static Map<String, Map<Integer, String>> columns = new TreeMap<>();
    
    /** Aliases:       Alias   Name */
    private static Map<String, String> aliases = new TreeMap<>();
@@ -3065,7 +3068,58 @@ public class QueryAnalyzer
          qids.add(queryId);
          inserts.put(insert.getTable().getName().toLowerCase(), qids);
 
-         return null;
+         if (s.toUpperCase().indexOf("SELECT") != -1)
+            return null;
+
+         initTableData(c, insert.getTable().getName());
+         currentTableName = insert.getTable().getName();
+
+         StringBuilder buffer = new StringBuilder();
+         ExpressionDeParser expressionDeParser = new ExpressionDeParser()
+         {
+            private int index = 1;
+
+            @Override
+            public void visit(JdbcParameter jdbcParameter)
+            {
+               try
+               {
+                  Table table = new Table(currentTableName);
+                  Column column = new Column(table, columns.get(currentTableName).get(Integer.valueOf(index)));
+                  String data = getData(c, column);
+                  Integer type = getType(c, column, query);
+
+                  values.add(data);
+                  types.add(type);
+
+                  this.getBuffer().append(data);
+               }
+               catch (Exception e)
+               {
+                  e.printStackTrace();
+               }
+
+               index++;
+            }
+         };
+         expressionDeParser.setBuffer(buffer);
+
+         net.sf.jsqlparser.util.deparser.InsertDeParser insertDeParser =
+            new net.sf.jsqlparser.util.deparser.InsertDeParser(expressionDeParser, null, buffer);
+
+         net.sf.jsqlparser.util.deparser.StatementDeParser statementDeParser =
+            new net.sf.jsqlparser.util.deparser.StatementDeParser(buffer)
+         {
+            @Override
+            public void visit(Insert insert)
+            {
+               insertDeParser.deParse(insert);
+            }
+         };
+
+         insert.accept(statementDeParser);
+
+         return buffer.toString();
       }
 
       System.out.println("Unsupported query: " + s);
@@ -3188,6 +3242,7 @@ public class QueryAnalyzer
    private static Map<String, Object> initTableData(Connection c, String tableName) throws Exception
    {
       Map<String, Object> values = new TreeMap<>();
+      Map<Integer, String> mapping = new TreeMap<>();
 
       tableName = tableName.toLowerCase();
 
@@ -3214,11 +3269,13 @@ public class QueryAnalyzer
                if (o == null)
                   o = getDefaultValue(columnType);
 
+               mapping.put(Integer.valueOf(i), columnName);
                values.put(columnName, o);
             }
          }
 
          data.put(tableName, values);
+         columns.put(tableName, mapping);
          return values;
       }
       finally
