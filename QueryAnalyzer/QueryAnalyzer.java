@@ -3068,11 +3068,11 @@ public class QueryAnalyzer
          qids.add(queryId);
          inserts.put(insert.getTable().getName().toLowerCase(), qids);
 
-         if (s.toUpperCase().indexOf("SELECT") != -1)
+         if (query.toUpperCase().indexOf("SELECT") != -1)
             return null;
 
          initTableData(c, insert.getTable().getName());
-         currentTableName = insert.getTable().getName();
+         currentTableName = insert.getTable().getName().toLowerCase();
 
          StringBuilder buffer = new StringBuilder();
          ExpressionDeParser expressionDeParser = new ExpressionDeParser()
@@ -3085,7 +3085,15 @@ public class QueryAnalyzer
                try
                {
                   Table table = new Table(currentTableName);
-                  Column column = new Column(table, columns.get(currentTableName).get(Integer.valueOf(index)));
+                  Column column = null;
+                  if (insert.getColumns() != null && insert.getColumns().size() > 0)
+                  {
+                     column = new Column(table, insert.getColumns().get(index - 1).getColumnName().toLowerCase());
+                  }
+                  else
+                  {
+                     column = new Column(table, columns.get(currentTableName).get(Integer.valueOf(index)));
+                  }
                   String data = getData(c, column);
                   Integer type = getType(c, column, query);
 
