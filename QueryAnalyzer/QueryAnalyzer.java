@@ -1260,7 +1260,7 @@ public class QueryAnalyzer
          suggested.add(idxName);
 
          if (!isPrimaryKey(table, cols))
-            createIndex(table, idxName, btree, cols, true, true);
+            createIndex(table, idxName, btree, cols, null, true, true);
       }
       l.add("</table>");
 
@@ -1742,6 +1742,33 @@ public class QueryAnalyzer
    }
 
    /**
+    * Get covering index name
+    * @param tableName The table name
+    * @param columns The columns
+    * @param includes The includes
+    * @return The index name
+    */
+   private static String getCoveringIndexName(String tableName, List<String> columns, List<String> includes)
+   {
+      StringBuilder indexName = new StringBuilder();
+      indexName.append("cidx_");
+      indexName.append(tableName);
+      indexName.append('_');
+      for (int i = 0; i < columns.size(); i++)
+      {
+         indexName.append(columns.get(i));
+         indexName.append('_');
+      }
+      for (int i = 0; i < includes.size(); i++)
+      {
+         indexName.append(includes.get(i));
+         if (i < includes.size() - 1)
+            indexName.append('_');
+      }
+      return indexName.toString();
+   }
+
+   /**
     * Valid index name
     * @param idxName The index name
     * @param tableName The table name
@@ -1754,15 +1781,31 @@ public class QueryAnalyzer
    }
 
    /**
+    * Valid covering index name
+    * @param idxName The index name
+    * @param tableName The table name
+    * @param columns The columns
+    * @param includes The includes
+    * @return True if valid, otherwise false
+    */
+   private static boolean validCoveringIndexName(String idxName, String tableName,
+                                                 List<String> columns, List<String> includes)
+   {
+      return idxName.equals(getCoveringIndexName(tableName, columns, includes));
+   }
+
+   /**
     * CREATE INDEX
     * @param tableName The table name
     * @param idxName The index name
     * @param btree Is the index a BTREE, or HASH
     * @param columns The columns
+    * @param includes The INCLUDE columns
     * @param ifNotExists IF NOT EXISTS
     * @param asComment Is this a comment
     */
-   private static void createIndex(String tableName, String idxName, boolean btree, List<String> columns,
+   private static void createIndex(String tableName, String idxName, boolean btree,
+                                   List<String> columns, List<String> includes,
                                    boolean ifNotExists, boolean asComment)
    {
       if (!asComment || debug)
@@ -1797,6 +1840,18 @@ public class QueryAnalyzer
                sb = sb.append(", ");
          }
          sb = sb.append(")");
+         if (includes != null)
+         {
+            sb = sb.append(" INCLUDE ");
+            sb = sb.append("(");
+            for (int i = 0; i < includes.size(); i++)
+            {
+               sb = sb.append(includes.get(i));
+               if (i < includes.size() - 1)
+                  sb = sb.append(", ");
+            }
+            sb = sb.append(")");
+         }
          sb = sb.append(";");
          l.add(sb.toString());
 
@@ -2461,13 +2516,80 @@ public class QueryAnalyzer
                      boolean asComment = prefixes.contains(newIndex.get(0));
                      if (!asComment)
                         asComment = hasIndex(tableName, indexName, newIndex);
-                     createIndex(tableName, indexName, btree, newIndex, false, asComment);
+                     createIndex(tableName, indexName, btree, newIndex, null, false, asComment);
                   }
 
                   result.add("</tr>");
                   suggested.add(newIndex);
                   prefixes.add(newIndex.get(0));
                   idx++;
+               }
+            }
+         }
+      }
+
+      // Consider covering indexes for PostgreSQL 11+
+      if (is11)
+      {
+         int numberOfColumns = columns.get(tableName).keySet().size();
+         if (numberOfColumns > 0)
+         {
+            for (Map.Entry<String, List<String>> entry : tableWhere.entrySet())
+            {
+               if (entry.getValue().size() == 1)
+               {
+                  String query = configuration.getProperty(entry.getKey());
+                  net.sf.jsqlparser.statement.Statement statement = CCJSqlParserUtil.parse(query);
+                  if (statement instanceof Select)
+                  {
+                     Select select = (Select)statement;
+                     if (select.getSelectBody() instanceof PlainSelect)
+                     {
+                        PlainSelect plainSelect = (PlainSelect)select.getSelectBody();
+                        if (plainSelect.getDistinct() == null && plainSelect.getJoins() == null)
+                        {
+                           if (plainSelect.getSelectItems().size() == 1 &&
+                               plainSelect.getSelectItems().get(0) instanceof SelectExpressionItem)
+                           {
+                              boolean hot = true;
+                              SelectExpressionItem sei = (SelectExpressionItem)plainSelect.getSelectItems().get(0);
+                              List<String> includes = new ArrayList<>();
+                              String columnName = sei.getExpression().toString();
+
+                              if (columnName.indexOf(".") != -1)
+                                 columnName = columnName.substring(columnName.indexOf(".") + 1);
+
+                              includes.add(columnName);
+                              String indexName = getCoveringIndexName(tableName, entry.getValue(), includes);
+
+                              if (tableSet != null)
+                              {
+                                 if (tableSet.contains(entry.getValue().get(0)) || tableSet.contains(columnName))
+                                    hot = false;
+                              }
+
+                              if (hot)
+                              {
+                                 result.add("<tr>");
+                                 result.add("<td>IDX" + idx + "</td>");
+                                 result.add("<td>" + indexName + "</td>");
+                                 result.add("<td>" + entry.getValue() + "</td>");
+                                 result.add("<td>covering</td>");
+
+                                 if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("row_information", "false"))))
+                                 {
+                                    result.add("<td></td>");
+                                 }
+
+                                 result.add("</tr>");
+
+                                 createIndex(tableName, indexName, true, entry.getValue(), includes, true, false);
+                                 idx++;
+                              }
+                           }
+                        }
+                     }
+                  }
                }
             }
          }
@@ -4192,7 +4314,7 @@ public class QueryAnalyzer
             {
                is10 = true;
             }
-            else if (Integer.valueOf(ver) == 11)
+            else if (Integer.valueOf(ver) >= 11)
             {
                is10 = true;
                is11 = true;
@@ -4204,7 +4326,7 @@ public class QueryAnalyzer
             {
                is10 = true;
             }
-            else if (ver.startsWith("11"))
+            else if (ver.startsWith("1"))
             {
                is10 = true;
                is11 = true;
