@@ -3001,10 +3001,18 @@ public class QueryAnalyzer
             {
                try
                {
-                  String data = getData(c, currentColumn);
+                  Object data = getData(c, currentColumn);
                   Integer type = getType(c, currentColumn, query);
 
-                  values.add(data);
+                  if (data == null)
+                  {
+                     data = getDefaultValue(type);
+                     if (data == null)
+                        System.out.println("Unsupported type " + type + " for " + query);
+                     if (needsQuotes(data))
+                        data = "'" + data + "'";
+                  }
+                  values.add(data.toString());
                   types.add(type);
 
                   this.getBuffer().append(data);
@@ -3093,10 +3101,19 @@ public class QueryAnalyzer
             {
                try
                {
-                  String data = getData(c, currentColumn, currentTableName);
+                  Object data = getData(c, currentColumn, currentTableName);
                   Integer type = getType(c, currentColumn, query, currentTableName);
 
-                  values.add(data);
+                  if (data == null)
+                  {
+                     data = getDefaultValue(type);
+                     if (data == null)
+                        System.out.println("Unsupported type " + type + " for " + query);
+                     if (needsQuotes(data))
+                        data = "'" + data + "'";
+                  }
+
+                  values.add(data.toString());
                   types.add(type);
 
                   this.getBuffer().append(data);
@@ -3219,10 +3236,19 @@ public class QueryAnalyzer
                   {
                      column = new Column(table, columns.get(currentTableName).get(Integer.valueOf(index)));
                   }
-                  String data = getData(c, column);
+                  Object data = getData(c, column);
                   Integer type = getType(c, column, query);
 
-                  values.add(data);
+                  if (data == null)
+                  {
+                     data = getDefaultValue(type);
+                     if (data == null)
+                        System.out.println("Unsupported type " + type + " for " + query);
+                     if (needsQuotes(data))
+                        data = "'" + data + "'";
+                  }
+
+                  values.add(data.toString());
                   types.add(type);
 
                   this.getBuffer().append(data);
