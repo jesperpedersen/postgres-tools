@@ -2268,12 +2268,12 @@ public class QueryAnalyzer
                   plan += s;
                   plan += "\n";
 
-                  if (s.startsWith("Planning time:"))
+                  if (s.startsWith("Planning"))
                   {
                      int index = s.indexOf(" ", 15);
                      plannerTimes.put(key, Double.valueOf(s.substring(15, index)));
                   }
-                  else if (s.startsWith("Execution time:"))
+                  else if (s.startsWith("Execution"))
                   {
                      int index = s.indexOf(" ", 16);
                      executorTimes.put(key, Double.valueOf(s.substring(16, index)));
