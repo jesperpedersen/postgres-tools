@@ -123,6 +123,12 @@ public class QueryAnalyzer
    /** Issue code: Disk sort */
    private static final String ISSUE_CODE_DISK_SORT = "Disk sort";
 
+   /** Issue code: UPDATE all columns */
+   private static final String ISSUE_CODE_UPDATE_ALL_COLUMNS = "UPDATE of all columns";
+
+   /** Issue code: UPDATE of primary key */
+   private static final String ISSUE_CODE_UPDATE_PRIMARY_KEY = "UPDATE of primary key";
+
    /** The configuration */
    private static Properties configuration;
 
@@ -2256,6 +2262,69 @@ public class QueryAnalyzer
                         {
                            ls.add(is);
                            issues.put(key, ls);
+                        }
+                     }
+                  }
+
+                  if (statement instanceof Update)
+                  {
+                     Update update = (Update)statement;
+                     if (update.getTables() != null && update.getTables().size() == 1)
+                     {
+                        String tableName = update.getTables().get(0).getName().toLowerCase();
+                        Map<Integer, String> cols = columns.get(tableName);
+                        if (cols != null && cols.size() > 0)
+                        {
+                           int counter = 1;
+                           List<String> pkCols = primaryKeys.get(tableName);
+                           if (pkCols != null && pkCols.size() > 1)
+                              counter = pkCols.size();
+
+                           if (update.getColumns().size() == cols.size() ||
+                               update.getColumns().size() == cols.size() - counter)
+                           {
+                              List<Issue> ls = issues.get(key);
+                              if (ls == null)
+                                 ls = new ArrayList<>();
+
+                              StringBuilder colsDesc = new StringBuilder();
+                              for (int i = 0; i < update.getColumns().size(); i++)
+                              {
+                                 colsDesc.append(update.getColumns().get(i).getColumnName());
+                                 if (i < update.getColumns().size() - 1)
+                                    colsDesc.append(", ");
+                              }
+
+                              Issue is = new Issue(ISSUE_TYPE_NORMAL_PRIORITY, ISSUE_CODE_UPDATE_ALL_COLUMNS,
+                                                   colsDesc.toString());
+                              if (!ls.contains(is))
+                              {
+                                 ls.add(is);
+                                 issues.put(key, ls);
+                              }
+                           }
+
+                           if (pkCols != null && pkCols.size() > 0)
+                           {
+                              for (int i = 0; i < update.getColumns().size(); i++)
+                              {
+                                 String colName = update.getColumns().get(i).getColumnName().toLowerCase();
+                                 if (pkCols.contains(colName))
+                                 {
+                                    List<Issue> ls = issues.get(key);
+                                    if (ls == null)
+                                       ls = new ArrayList<>();
+
+                                    Issue is = new Issue(ISSUE_TYPE_HIGH_PRIORITY, ISSUE_CODE_UPDATE_PRIMARY_KEY,
+                                                         colName);
+                                    if (!ls.contains(is))
+                                    {
+                                       ls.add(is);
+                                       issues.put(key, ls);
+                                    }
+                                 }
+                              }
+                           }
                         }
                      }
                   }
