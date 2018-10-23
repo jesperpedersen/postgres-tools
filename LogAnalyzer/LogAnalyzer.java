@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2017 Jesper Pedersen <jesper.pedersen@comcast.net>
+ * Copyright (c) 2018 Jesper Pedersen <jesper.pedersen@comcast.net>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -172,6 +172,12 @@ public class LogAnalyzer
 
    /** Total idle in transaction */
    private static Map<String, Long> totalIdleInTransaction = new TreeMap<>();
+
+   /** Idle in transaction: Proc      Ms       Count */
+   private static Map<String, TreeMap<Integer, Integer>> mIdleInTransaction = new TreeMap<>();
+
+   /** Wait time:     Process         Ms       Count */
+   private static Map<String, TreeMap<Integer, Integer>> waitTime = new TreeMap<>();
 
    /** Max clients */
    private static Map<String, Integer> maxClients = new TreeMap<>();
@@ -668,7 +674,9 @@ public class LogAnalyzer
       double transactionTime = 0.0;
       long pIdleInTransaction = 0;
       long idleInTransaction = 0;
+      long pWaitTime = 0;
       LogEntry beginLE = null;
+      LogEntry previousLE = null;
 
       transactionTimeline.add("Time,Duration");
       
@@ -685,6 +693,25 @@ public class LogAnalyzer
                inTransaction = true;
                transactionTime = le.getDuration();
                beginLE = le;
+
+               if (previousLE != null)
+               {
+                  Integer waitKey = Integer.valueOf((int)(le.timeAsLong() - previousLE.timeAsLong()));
+                  if (waitKey.intValue() > 0)
+                  {
+                     pWaitTime += waitKey;
+
+                     TreeMap<Integer, Integer> countMap = waitTime.get(pname);
+                     if (countMap == null)
+                        countMap = new TreeMap<>();
+                     Integer count = countMap.get(waitKey);
+                     if (count == null)
+                        count = Integer.valueOf(0);
+                     count = Integer.valueOf(count.intValue() + 1);
+                     countMap.put(waitKey, count);
+                     waitTime.put(pname, countMap);
+                  }
+               }
             }
             else
             {
@@ -721,6 +748,25 @@ public class LogAnalyzer
                   inTransaction = true;
                   transactionTime = le.getDuration();
                   beginLE = le;
+
+                  if (previousLE != null)
+                  {
+                     Integer waitKey = Integer.valueOf((int)(le.timeAsLong() - previousLE.timeAsLong()));
+                     if (waitKey.intValue() > 0)
+                     {
+                        pWaitTime += waitKey;
+
+                        TreeMap<Integer, Integer> countMap = waitTime.get(pname);
+                        if (countMap == null)
+                           countMap = new TreeMap<>();
+                        Integer count = countMap.get(waitKey);
+                        if (count == null)
+                           count = Integer.valueOf(0);
+                        count = Integer.valueOf(count.intValue() + 1);
+                        countMap.put(waitKey, count);
+                        waitTime.put(pname, countMap);
+                     }
+                  }
                }
                else
                {
@@ -743,6 +789,25 @@ public class LogAnalyzer
                   inTransaction = true;
                   transactionTime = 0.0;
                   beginLE = le;
+
+                  if (previousLE != null)
+                  {
+                     Integer waitKey = Integer.valueOf((int)(le.timeAsLong() - previousLE.timeAsLong()));
+                     if (waitKey.intValue() > 0)
+                     {
+                        pWaitTime += waitKey;
+
+                        TreeMap<Integer, Integer> countMap = waitTime.get(pname);
+                        if (countMap == null)
+                           countMap = new TreeMap<>();
+                        Integer count = countMap.get(waitKey);
+                        if (count == null)
+                           count = Integer.valueOf(0);
+                        count = Integer.valueOf(count.intValue() + 1);
+                        countMap.put(waitKey, count);
+                        waitTime.put(pname, countMap);
+                     }
+                  }
                }
                else if (s.startsWith("COMMIT"))
                {
@@ -898,11 +963,26 @@ public class LogAnalyzer
                   transactionTime = 0.0;
                }
 
+               Integer idleKey = Integer.valueOf((int)idleInTransaction);
+               if (idleKey.intValue() > 0)
+               {
+                  TreeMap<Integer, Integer> countMap = mIdleInTransaction.get(pname);
+                  if (countMap == null)
+                     countMap = new TreeMap<>();
+                  Integer count = countMap.get(idleKey);
+                  if (count == null)
+                     count = Integer.valueOf(0);
+                  count = Integer.valueOf(count.intValue() + 1);
+                  countMap.put(idleKey, count);
+                  mIdleInTransaction.put(pname, countMap);
+               }
+
                duration = 0.0;
                pIdleInTransaction += idleInTransaction;
                idleInTransaction = 0;
             }
          }
+         previousLE = le;
       }
 
       Long tidit = totalIdleInTransaction.get(id);
@@ -946,6 +1026,10 @@ public class LogAnalyzer
          l.add("<td>" + pIdleInTransaction + " ms</td>");
          l.add("</tr>");
          l.add("<tr>");
+         l.add("<td><b>Wait time</b></td>");
+         l.add("<td>" + pWaitTime + " ms</td>");
+         l.add("</tr>");
+         l.add("<tr>");
          l.add("<td><b>BEGIN</b></td>");
          l.add("<td>" + begin + "</td>");
          l.add("</tr>");
@@ -971,6 +1055,14 @@ public class LogAnalyzer
          l.add("<div id=\"txtimeline\" style=\"width:1024px; height:768px;\">");
          l.add("</div>");
 
+         l.add("<h2>Idle in transaction</h2>");
+         l.add("<div id=\"idleintx\" style=\"width:1024px; height:768px;\">");
+         l.add("</div>");
+
+         l.add("<h2>Wait time</h2>");
+         l.add("<div id=\"waittime\" style=\"width:1024px; height:768px;\">");
+         l.add("</div>");
+
          l.add("<h2>Executed</h2>");
          l.add("<table border=\"1\">");
          l.addAll(queries);
@@ -986,6 +1078,20 @@ public class LogAnalyzer
          l.add("                              ylabel: 'Duration',");
          l.add("                            }");
          l.add("   );");
+         l.add("   idleInTx = new Dygraph(document.getElementById(\"idleintx\"),");
+         l.add("                          \"" + pname + "-idle.csv\",");
+         l.add("                          {");
+         l.add("                            legend: 'always',");
+         l.add("                            ylabel: 'Count',");
+         l.add("                          }");
+         l.add("   );");
+         l.add("   waitTime = new Dygraph(document.getElementById(\"waittime\"),");
+         l.add("                          \"" + pname + "-wait.csv\",");
+         l.add("                          {");
+         l.add("                            legend: 'always',");
+         l.add("                            ylabel: 'Count',");
+         l.add("                          }");
+         l.add("   );");
          l.add("</script>");
 
          l.add("</body>");
@@ -993,6 +1099,44 @@ public class LogAnalyzer
 
          writeFile(Paths.get("report", pname + ".html"), l);
          writeFile(Paths.get("report", pname + "-transaction.csv"), transactionTimeline);
+
+         List<String> idleReport = new ArrayList<>();
+         idleReport.add("Time,Count");
+         TreeMap<Integer, Integer> idleCounts = mIdleInTransaction.get(pname);
+         if (idleCounts != null)
+         {
+            Integer max = idleCounts.lastKey();
+            if (max != null)
+            {
+               for (int i = 0; i <= max + 1; i++)
+               {
+                  Integer val = idleCounts.get(i);
+                  if (val == null)
+                     val = Integer.valueOf(0);
+                  idleReport.add(i + "," + val);
+               }
+            }
+         }
+         writeFile(Paths.get("report", pname + "-idle.csv"), idleReport);
+
+         List<String> waitReport = new ArrayList<>();
+         waitReport.add("Time,Count");
+         TreeMap<Integer, Integer> waitCounts = waitTime.get(pname);
+         if (waitCounts != null)
+         {
+            Integer max = waitCounts.lastKey();
+            if (max != null)
+            {
+               for (int i = 0; i <= max + 1; i++)
+               {
+                  Integer val = waitCounts.get(i);
+                  if (val == null)
+                     val = Integer.valueOf(0);
+                  waitReport.add(i + "," + val);
+               }
+            }
+         }
+         writeFile(Paths.get("report", pname + "-wait.csv"), waitReport);
       }
    }
    
