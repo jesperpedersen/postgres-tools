@@ -121,6 +121,7 @@ public class PostgreSQLInfo
       l.add("    <tr align=\"left\">");
       l.add("      <th><b>Key</b></th>");
       l.add("      <th><b>Value</b></th>");
+      l.add("      <th><b>Default</b></th>");
       l.add("    </tr>");
       l.add("  </thead>");
 
@@ -140,6 +141,7 @@ public class PostgreSQLInfo
             l.add("    <tr align=\"left\">");
             l.add("      <td>" + entry.getKey() + "</td>");
             l.add("      <td>" + entry.getValue() + "</td>");
+            l.add("      <td></td>");
             l.add("    </tr>");
          }
          else
@@ -147,6 +149,7 @@ public class PostgreSQLInfo
             l.add("    <tr align=\"left\">");
             l.add("      <td><b>" + entry.getKey() + "</b></td>");
             l.add("      <td><b>" + entry.getValue() + "</b></td>");
+            l.add("      <td>" + (defaultValue != null ? defaultValue : "") + "</td>");
             l.add("    </tr>");
          }
       }
