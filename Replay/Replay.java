@@ -476,11 +476,17 @@ public class Replay
                @Override
                public void visit(JdbcParameter jdbcParameter)
                {
-                  String table = currentColumn.getTable().getName();
+                  String table = null;
                   String column = currentColumn.getColumnName();
 
-                  if (table == null)
+                  if (currentColumn.getTable() != null)
+                  {
+                     table = currentColumn.getTable().getName();
+                  }
+                  else
+                  {
                      table = currentTableName;
+                  }
 
                   if (aliases.containsKey(table))
                      table = aliases.get(table);
@@ -544,11 +550,17 @@ public class Replay
                @Override
                public void visit(JdbcParameter jdbcParameter)
                {
-                  String table = currentColumn.getTable().getName();
+                  String table = null;
                   String column = currentColumn.getColumnName();
 
-                  if (table == null)
+                  if (currentColumn.getTable() != null)
+                  {
+                     table = currentColumn.getTable().getName();
+                  }
+                  else
+                  {
                      table = currentTableName;
+                  }
                
                   if (aliases.containsKey(table))
                      table = aliases.get(table);
@@ -612,11 +624,17 @@ public class Replay
                @Override
                public void visit(JdbcParameter jdbcParameter)
                {
-                  String table = currentColumn.getTable().getName();
+                  String table = null;
                   String column = currentColumn.getColumnName();
 
-                  if (table == null)
+                  if (currentColumn.getTable() != null)
+                  {
+                     table = currentColumn.getTable().getName();
+                  }
+                  else
+                  {
                      table = currentTableName;
+                  }
                
                   if (aliases.containsKey(table))
                      table = aliases.get(table);
@@ -655,11 +673,17 @@ public class Replay
 
             for (Column currentColumn : insert.getColumns())
             {
-               String table = currentColumn.getTable().getName();
+               String table = null;
                String column = currentColumn.getColumnName();
 
-               if (table == null)
+               if (currentColumn.getTable() != null)
+               {
+                  table = currentColumn.getTable().getName();
+               }
+               else
+               {
                   table = currentTableName;
+               }
                
                if (aliases.containsKey(table))
                   table = aliases.get(table);
