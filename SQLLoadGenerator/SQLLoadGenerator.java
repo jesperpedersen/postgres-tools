@@ -384,6 +384,14 @@ public class SQLLoadGenerator
 
          int cStatements = profile.getProperty("client." + i + ".statements") != null ?
             Integer.parseInt(profile.getProperty("client." + i + ".statements")) : statements;
+         int cMixSelect = profile.getProperty("client." + i + ".mix.select") != null ?
+            Integer.parseInt(profile.getProperty("client." + i + ".mix.select")) : mixSelect;
+         int cMixUpdate = profile.getProperty("client." + i + ".mix.update") != null ?
+            Integer.parseInt(profile.getProperty("client." + i + ".mix.update")) : mixUpdate;
+         int cMixInsert = profile.getProperty("client." + i + ".mix.insert") != null ?
+            Integer.parseInt(profile.getProperty("client." + i + ".mix.insert")) : mixInsert;
+         int cMixDelete = profile.getProperty("client." + i + ".mix.delete") != null ?
+            Integer.parseInt(profile.getProperty("client." + i + ".mix.delete")) : mixDelete;
 
          List<String> l = new ArrayList<>();
          int statement = 0;
@@ -411,18 +419,18 @@ public class SQLLoadGenerator
                int type = 0;
                List<String> result = null;
 
-               int m = random.nextInt(mixSelect + mixUpdate + mixInsert + mixDelete + 1);
+               int m = random.nextInt(cMixSelect + cMixUpdate + cMixInsert + cMixDelete + 1);
                if (m <= mixSelect)
                {
                   type = 0;
                }
-               else if (m <= mixSelect + mixUpdate)
+               else if (m <= cMixSelect + cMixUpdate)
                {
                   type = 1;
                   if (colNames.size() <= 1)
                      type = 0;
                }
-               else if (m <= mixSelect + mixUpdate + mixInsert)
+               else if (m <= cMixSelect + cMixUpdate + cMixInsert)
                {
                   type = 2;
                }

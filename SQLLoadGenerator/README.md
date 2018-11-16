@@ -50,6 +50,38 @@ The number of statements for a specific client. Example
 client.1.statements=10
 ```
 
+### client.X.mix.select
+
+The mix of ```SELECT``` for a specific client. Example
+
+```
+client.1.mix.select=90
+```
+
+### client.X.mix.update
+
+The mix of ```UPDATE``` for a specific client. Example
+
+```
+client.1.mix.update=5
+```
+
+### client.X.mix.insert
+
+The mix of ```INSERT``` for a specific client. Example
+
+```
+client.1.mix.insert=5
+```
+
+### client.X.mix.delete
+
+The mix of ```DELETE``` for a specific client. Example
+
+```
+client.1.mix.delete=0
+```
+
 ### rows
 
 The global number of rows in each table. Default is ```1000```.
@@ -64,19 +96,19 @@ The maximum number of statements per transaction. Default is ```5```.
 
 ### mix.select
 
-The mix for ```SELECT``` statements.  Default is ```70```.
+The global mix for ```SELECT``` statements.  Default is ```70```.
 
 ### mix.update
 
-The mix for ```UPDATE``` statements.  Default is ```15```.
+The global mix for ```UPDATE``` statements.  Default is ```15```.
 
 ### mix.insert
 
-The mix for ```INSERT``` statements.  Default is ```10```.
+The global mix for ```INSERT``` statements.  Default is ```10```.
 
 ### mix.delete
 
-The mix for ```DELETE``` statements.  Default is ```5```.
+The global mix for ```DELETE``` statements.  Default is ```5```.
 
 ### commit
 
