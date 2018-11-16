@@ -150,7 +150,7 @@ Define a column number Y for table X. Example
 test.col.1=a
 ```
 
-Column 1 is used as the table identifier (no primary key support yet).
+Column 1 is the default table identifier if no primary key is defined.
 
 ### X.col.Y.type
 
@@ -169,6 +169,16 @@ Define the column description for column number Y in table X. Example
 ```
 test.col.1.description=This is my column
 ```
+
+### X.col.Y.primarykey
+
+Define the column as the primary key for column number Y in table X. Example
+
+```
+test.col.1.primarykey=true
+```
+
+Note, that workload ```INSERT```s will be disabled.
 
 ### X.rows
 

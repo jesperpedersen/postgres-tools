@@ -91,6 +91,9 @@ public class SQLLoadGenerator
    /** Column types   Table   Types */
    private static Map<String, List<String>> columnTypes = new TreeMap<>();
    
+   /** Primary keys   Table   Column */
+   private static Map<String, String> primaryKeys = new TreeMap<>();
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -129,6 +132,7 @@ public class SQLLoadGenerator
          {
             String tableName = key.substring(key.indexOf(".") + 1);
             String description = profile.getProperty(key);
+            String primaryKey = null;
             int counter = 1;
 
             List<String> colNames = new ArrayList<>();
@@ -140,6 +144,7 @@ public class SQLLoadGenerator
                String name = profile.getProperty(tableName + ".col." + counter);
                String type = profile.getProperty(tableName + ".col." + counter + ".type");
                String desc = profile.getProperty(tableName + ".col." + counter + ".description");
+               String pk = profile.getProperty(tableName + ".col." + counter + ".primarykey");
 
                if (type == null)
                   type = "int";
@@ -159,6 +164,22 @@ public class SQLLoadGenerator
                   colDescriptions.add(sb.toString());
                }
                
+               if (pk != null && !"".equals(pk.trim()))
+               {
+                  if (Boolean.parseBoolean(pk))
+                  {
+                     if (primaryKey == null)
+                     {
+                        primaryKey = name;
+                        primaryKeys.put(tableName, primaryKey);
+                     }
+                     else
+                     {
+                        throw new Exception("Already have primary key \'" + primaryKey + "\' on table " + tableName);
+                     }
+                  }
+               }
+
                colNames.add(name);
                colTypes.add(type);
 
@@ -179,6 +200,8 @@ public class SQLLoadGenerator
                   sb.append(colNames.get(i));
                   sb.append(" ");
                   sb.append(colTypes.get(i));
+                  if (primaryKey != null && primaryKey.equals(colNames.get(i)))
+                     sb.append(" PRIMARY KEY");
                   if (i < colNames.size() - 1)
                      sb.append(", ");
                }
@@ -199,22 +222,25 @@ public class SQLLoadGenerator
 
                l.addAll(colDescriptions);
 
-               sb = new StringBuilder();
-               sb.append("CREATE INDEX idx_");
-               sb.append(tableName);
-               sb.append("_");
-               sb.append(colNames.get(0));
-               sb.append(" ON ");
-               sb.append(tableName);
-               if (!isBTreeIndex(colTypes.get(0)))
+               if (primaryKey == null)
                {
-                  sb.append(" USING HASH");
+                  sb = new StringBuilder();
+                  sb.append("CREATE INDEX idx_");
+                  sb.append(tableName);
+                  sb.append("_");
+                  sb.append(colNames.get(0));
+                  sb.append(" ON ");
+                  sb.append(tableName);
+                  if (!isBTreeIndex(colTypes.get(0)))
+                  {
+                     sb.append(" USING HASH");
+                  }
+                  sb.append(" (");
+                  sb.append(colNames.get(0));
+                  sb.append(");");
+
+                  l.add(sb.toString());
                }
-               sb.append(" (");
-               sb.append(colNames.get(0));
-               sb.append(");");
-            
-               l.add(sb.toString());
             }
             else
             {
@@ -475,10 +501,13 @@ public class SQLLoadGenerator
                   }
                }
 
-               l.add("P");
-               l.add(result.get(0));
-               l.add(result.get(1));
-               l.add(result.get(2));
+               if (result != null)
+               {
+                  l.add("P");
+                  l.add(result.get(0));
+                  l.add(result.get(1));
+                  l.add(result.get(2));
+               }
             }
 
             l.add("P");
@@ -528,6 +557,11 @@ public class SQLLoadGenerator
       throws Exception
    {
       List<String> result = new ArrayList<>(3);
+      String pk = primaryKeys.get(table);
+      int index = 0;
+
+      if (pk != null)
+         index = colNames.indexOf(pk);
 
       StringBuilder sql = new StringBuilder();
       sql.append("SELECT ");
@@ -540,12 +574,12 @@ public class SQLLoadGenerator
       sql.append(" FROM ");
       sql.append(table);
       sql.append(" WHERE ");
-      sql.append(colNames.get(0));
+      sql.append(colNames.get(index));
       sql.append(" = ?");
                
       result.add(sql.toString());
-      result.add(getJavaType(colTypes.get(0)));
-      result.add(getData(colTypes.get(0), random.nextInt(DEFAULT_ROWS)));
+      result.add(getJavaType(colTypes.get(index)));
+      result.add(getData(colTypes.get(index), random.nextInt(DEFAULT_ROWS)));
 
       return result;
    }
@@ -557,47 +591,91 @@ public class SQLLoadGenerator
       throws Exception
    {
       List<String> result = new ArrayList<>(3);
+      String pk = primaryKeys.get(table);
+      int index = 0;
+
+      if (pk != null)
+         index = colNames.indexOf(pk);
 
       StringBuilder sql = new StringBuilder();
       sql.append("UPDATE ");
       sql.append(table);
       sql.append(" SET ");
-      for (int col = 1; col < colNames.size(); col++)
+      for (int col = 0; col < colNames.size(); col++)
       {
-         sql.append(colNames.get(col));
-         sql.append(" = ?");
-         if (col < colNames.size() - 1)
-            sql.append(", ");
+         if (pk == null && col != 0)
+         {
+            sql.append(colNames.get(col));
+            sql.append(" = ?");
+
+            if (col < colNames.size() - 1)
+               sql.append(", ");
+         }
+         else
+         {
+            if (col != index)
+            {
+               sql.append(colNames.get(col));
+               sql.append(" = ?");
+
+               if (col < colNames.size() - 1)
+                  sql.append(", ");
+            }
+         }
       }
       sql.append(" WHERE ");
-      sql.append(colNames.get(0));
+      sql.append(colNames.get(index));
       sql.append(" = ?");
                
       result.add(sql.toString());
 
       StringBuilder types = new StringBuilder();
-      for (int col = 1; col < colNames.size(); col++)
+      for (int col = 0; col < colNames.size(); col++)
       {
-         types.append(getJavaType(colTypes.get(col)));
-         if (col < colNames.size() - 1)
-            types.append("|");
+         if (pk == null && col != 0)
+         {
+            types.append(getJavaType(colTypes.get(col)));
+            if (col < colNames.size() - 1)
+               types.append("|");
+         }
+         else
+         {
+            if (col != index)
+            {
+               types.append(getJavaType(colTypes.get(col)));
+               if (col < colNames.size() - 1)
+                  types.append("|");
+            }
+         }
       }
       if (colNames.size() > 1)
          types.append("|");
-      types.append(getJavaType(colTypes.get(0)));
+      types.append(getJavaType(colTypes.get(index)));
 
       result.add(types.toString());
 
       StringBuilder values = new StringBuilder();
-      for (int col = 1; col < colNames.size(); col++)
+      for (int col = 0; col < colNames.size(); col++)
       {
-         values.append(getData(colTypes.get(col), random.nextInt(DEFAULT_ROWS)));
-         if (col < colNames.size() - 1)
-            values.append("|");
+         if (pk == null && col != 0)
+         {
+            values.append(getData(colTypes.get(col), random.nextInt(DEFAULT_ROWS)));
+            if (col < colNames.size() - 1)
+               values.append("|");
+         }
+         else
+         {
+            if (col != index)
+            {
+               values.append(getData(colTypes.get(col), random.nextInt(DEFAULT_ROWS)));
+               if (col < colNames.size() - 1)
+                  values.append("|");
+            }
+         }
       }
       if (colNames.size() > 1)
          values.append("|");
-      values.append(getData(colTypes.get(0), random.nextInt(DEFAULT_ROWS)));
+      values.append(getData(colTypes.get(index), random.nextInt(DEFAULT_ROWS)));
       
       result.add(values.toString());
 
@@ -611,10 +689,14 @@ public class SQLLoadGenerator
       throws Exception
    {
       List<String> result = new ArrayList<>(3);
+      String pk = primaryKeys.get(table);
 
       StringBuilder sql = new StringBuilder();
       StringBuilder types = new StringBuilder();
       StringBuilder values = new StringBuilder();
+
+      if (pk != null)
+         return null;
 
       sql.append("INSERT INTO ");
       sql.append(table);
@@ -655,17 +737,22 @@ public class SQLLoadGenerator
       throws Exception
    {
       List<String> result = new ArrayList<>(3);
+      String pk = primaryKeys.get(table);
+      int index = 0;
+
+      if (pk != null)
+         index = colNames.indexOf(pk);
 
       StringBuilder sql = new StringBuilder();
       sql.append("DELETE FROM ");
       sql.append(table);
       sql.append(" WHERE ");
-      sql.append(colNames.get(0));
+      sql.append(colNames.get(index));
       sql.append(" = ?");
                
       result.add(sql.toString());
-      result.add(getJavaType(colTypes.get(0)));
-      result.add(getData(colTypes.get(0), random.nextInt(DEFAULT_ROWS)));
+      result.add(getJavaType(colTypes.get(index)));
+      result.add(getData(colTypes.get(index), random.nextInt(DEFAULT_ROWS)));
 
       return result;
    }
