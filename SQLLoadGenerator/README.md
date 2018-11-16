@@ -82,6 +82,22 @@ The mix of ```DELETE``` for a specific client. Example
 client.1.mix.delete=0
 ```
 
+### client.X.commit
+
+The mix of ```COMMIT``` for a specific client. Example
+
+```
+client.1.commit=70
+```
+
+### client.X.rollback
+
+The mix of ```ROLLBACK``` for a specific client. Example
+
+```
+client.1.rollback=30
+```
+
 ### rows
 
 The global number of rows in each table. Default is ```1000```.
@@ -112,11 +128,11 @@ The global mix for ```DELETE``` statements.  Default is ```5```.
 
 ### commit
 
-The mix for ```COMMIT``` transactions.  Default is ```100```.
+The global mix for ```COMMIT``` transactions.  Default is ```100```.
 
 ### rollback
 
-The mix for ```ROLLBACK``` transactions.  Default is ```0```.
+The global mix for ```ROLLBACK``` transactions.  Default is ```0```.
 
 ### table.X
 

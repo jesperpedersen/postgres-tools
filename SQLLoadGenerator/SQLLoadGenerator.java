@@ -392,6 +392,10 @@ public class SQLLoadGenerator
             Integer.parseInt(profile.getProperty("client." + i + ".mix.insert")) : mixInsert;
          int cMixDelete = profile.getProperty("client." + i + ".mix.delete") != null ?
             Integer.parseInt(profile.getProperty("client." + i + ".mix.delete")) : mixDelete;
+         int cCommit = profile.getProperty("client." + i + ".commit") != null ?
+            Integer.parseInt(profile.getProperty("client." + i + ".commit")) : commit;
+         int cRollback = profile.getProperty("client." + i + ".rollback") != null ?
+            Integer.parseInt(profile.getProperty("client." + i + ".rollback")) : rollback;
 
          List<String> l = new ArrayList<>();
          int statement = 0;
@@ -478,8 +482,8 @@ public class SQLLoadGenerator
             }
 
             l.add("P");
-            int c = random.nextInt(commit + rollback + 1);
-            if (c <= commit)
+            int c = random.nextInt(cCommit + cRollback + 1);
+            if (c <= cCommit)
             {
                l.add("COMMIT");
                totalTxC++;
