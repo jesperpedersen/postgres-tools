@@ -49,6 +49,10 @@ Replay of SQL sent by an application
 
 Resolve addresses using eu-addr2line in a flamegraph input file
 
+### SQLLoadGenerator
+
+Generate an OLTP workload for Replay
+
 ### ShrinkLog
 
 Shrink a PostgreSQL log
