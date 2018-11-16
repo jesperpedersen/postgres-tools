@@ -382,9 +382,12 @@ public class SQLLoadGenerator
          txR = 0;
          distTx = new int[mspt];
 
+         int cStatements = profile.getProperty("client." + i + ".statements") != null ?
+            Integer.parseInt(profile.getProperty("client." + i + ".statements")) : statements;
+
          List<String> l = new ArrayList<>();
          int statement = 0;
-         while (statement <= statements)
+         while (statement <= cStatements)
          {
             int numberOfStatements = random.nextInt(mspt + 1);
             if (numberOfStatements == 0)

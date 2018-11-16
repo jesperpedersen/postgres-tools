@@ -42,6 +42,14 @@ cd /path/to/work_area
 
 The number of clients that should be generated. Default is ```10```.
 
+### client.X.statements
+
+The number of statements for a specific client. Example
+
+```
+client.1.statements=10
+```
+
 ### rows
 
 The global number of rows in each table. Default is ```1000```.
@@ -52,7 +60,7 @@ The number of statements for each client. Default is ```10000```.
 
 ### mspt
 
-The maximum of statements per transaction. Default is ```5```.
+The maximum number of statements per transaction. Default is ```5```.
 
 ### mix.select
 
@@ -93,6 +101,8 @@ Define a column number Y for table X. Example
 ```
 test.col.1=a
 ```
+
+Column 1 is used as the table identifier (no primary key support yet).
 
 ### X.col.Y.type
 
