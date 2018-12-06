@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * Generate a SQL workload for Replay
@@ -93,6 +94,9 @@ public class SQLLoadGenerator
    
    /** Primary keys   Table   Column */
    private static Map<String, String> primaryKeys = new TreeMap<>();
+
+   /** Active PKs     Table           PKs */
+   private static Map<String, TreeSet<String>> activePKs = new TreeMap<>();
 
    /**
     * Write data to a file
@@ -304,16 +308,14 @@ public class SQLLoadGenerator
    private static void writeData(String profileName) throws Exception
    {
       List<String> l = new ArrayList<>();
-      int defaultRows = profile.getProperty("rows") != null ?
-         Integer.parseInt(profile.getProperty("rows")) : DEFAULT_ROWS;
 
       for (Map.Entry<String, List<String>> entry : columnNames.entrySet())
       {
          String tableName = entry.getKey();
          List<String> colNames = entry.getValue();
          List<String> colTypes = columnTypes.get(tableName);
-         int rows = profile.getProperty(tableName + ".rows") != null ?
-            Integer.parseInt(profile.getProperty(tableName + ".rows")) : defaultRows;
+         int rows = getRows(tableName);
+         String pk = primaryKeys.get(tableName);
 
          for (int row = 1; row <= rows; row++)
          {
@@ -332,7 +334,14 @@ public class SQLLoadGenerator
             {
                if (mustEscape(colTypes.get(i)))
                   sb.append("\'");
-               sb.append(getData(colTypes.get(i), row, i == 0 ? false : true));
+               if (pk != null && colNames.get(i).equals(pk))
+               {
+                  sb.append(generatePrimaryKey(tableName, colTypes.get(i), row, false));
+               }
+               else
+               {
+                  sb.append(getData(colTypes.get(i), row, i == 0 ? false : true));
+               }
                if (mustEscape(colTypes.get(i)))
                   sb.append("\'");
                if (i < colTypes.size() - 1)
@@ -579,7 +588,7 @@ public class SQLLoadGenerator
                
       result.add(sql.toString());
       result.add(getJavaType(colTypes.get(index)));
-      result.add(getData(colTypes.get(index), random.nextInt(DEFAULT_ROWS)));
+      result.add(getData(colTypes.get(index), random.nextInt(getRows(table))));
 
       return result;
    }
@@ -593,6 +602,7 @@ public class SQLLoadGenerator
       List<String> result = new ArrayList<>(3);
       String pk = primaryKeys.get(table);
       int index = 0;
+      int rows = getRows(table);
 
       if (pk != null)
          index = colNames.indexOf(pk);
@@ -659,7 +669,7 @@ public class SQLLoadGenerator
       {
          if (pk == null && col != 0)
          {
-            values.append(getData(colTypes.get(col), random.nextInt(DEFAULT_ROWS)));
+            values.append(getData(colTypes.get(col), random.nextInt(rows)));
             if (col < colNames.size() - 1)
                values.append("|");
          }
@@ -667,7 +677,7 @@ public class SQLLoadGenerator
          {
             if (col != index)
             {
-               values.append(getData(colTypes.get(col), random.nextInt(DEFAULT_ROWS)));
+               values.append(getData(colTypes.get(col), random.nextInt(rows)));
                if (col < colNames.size() - 1)
                   values.append("|");
             }
@@ -675,7 +685,7 @@ public class SQLLoadGenerator
       }
       if (colNames.size() > 1)
          values.append("|");
-      values.append(getData(colTypes.get(index), random.nextInt(DEFAULT_ROWS)));
+      values.append(getData(colTypes.get(index), random.nextInt(rows)));
       
       result.add(values.toString());
 
@@ -690,13 +700,11 @@ public class SQLLoadGenerator
    {
       List<String> result = new ArrayList<>(3);
       String pk = primaryKeys.get(table);
+      int rows = getRows(table);
 
       StringBuilder sql = new StringBuilder();
       StringBuilder types = new StringBuilder();
       StringBuilder values = new StringBuilder();
-
-      if (pk != null)
-         return null;
 
       sql.append("INSERT INTO ");
       sql.append(table);
@@ -713,7 +721,14 @@ public class SQLLoadGenerator
          String colType = colTypes.get(i);
          sql.append("?");
          types.append(getJavaType(colTypes.get(i)));
-         values.append(getData(colType, random.nextInt(DEFAULT_ROWS)));
+         if (pk != null && colNames.get(i).equals(pk))
+         {
+            values.append(generatePrimaryKey(table, colType));
+         }
+         else
+         {
+            values.append(getData(colType, random.nextInt(rows)));
+         }
          if (i < colTypes.size() - 1)
          {
             sql.append(", ");
@@ -739,6 +754,7 @@ public class SQLLoadGenerator
       List<String> result = new ArrayList<>(3);
       String pk = primaryKeys.get(table);
       int index = 0;
+      int rows = getRows(table);
 
       if (pk != null)
          index = colNames.indexOf(pk);
@@ -752,7 +768,16 @@ public class SQLLoadGenerator
                
       result.add(sql.toString());
       result.add(getJavaType(colTypes.get(index)));
-      result.add(getData(colTypes.get(index), random.nextInt(DEFAULT_ROWS)));
+      if (pk != null)
+      {
+         String value = getPrimaryKey(table, colTypes.get(index), random.nextInt(rows));
+         deletePrimaryKey(table, value);
+         result.add(value);
+      }
+      else
+      {
+         result.add(getData(colTypes.get(index), random.nextInt(rows)));
+      }
 
       return result;
    }
@@ -887,6 +912,107 @@ public class SQLLoadGenerator
    }
 
    /**
+    * Generate primary key
+    * @param table The table
+    * @param type The type
+    */
+   private static String generatePrimaryKey(String table, String type) throws Exception
+   {
+      return generatePrimaryKey(table, type, random.nextInt(Integer.MAX_VALUE));
+   }
+
+   /**
+    * Generate primary key
+    * @param table The table
+    * @param type The type
+    * @param row Hint for row number
+    */
+   private static String generatePrimaryKey(String table, String type, int row) throws Exception
+   {
+      return generatePrimaryKey(table, type, row, true);
+   }
+
+   /**
+    * Generate primary key
+    * @param table The table
+    * @param type The type
+    * @param row Hint for row number
+    * @param r Random
+    */
+   private static String generatePrimaryKey(String table, String type, int row, boolean r) throws Exception
+   {
+      String newpk = getData(type, row, r);
+      TreeSet<String> apks = activePKs.get(table);
+
+      if (apks == null)
+         apks = new TreeSet<>();
+
+      while (apks.contains(newpk))
+      {
+         newpk = getData(type, row, r);
+      }
+
+      apks.add(newpk);
+      activePKs.put(table, apks);
+
+      return newpk;
+   }
+
+   /**
+    * Get a random primary key
+    * @param table The table
+    * @param type The type
+    * @param row Hint for row number
+    * @return The primary key
+    */
+   private static String getPrimaryKey(String table, String type, int row) throws Exception
+   {
+      TreeSet<String> apks = activePKs.get(table);
+
+      if (apks != null)
+      {
+         String[] vals = apks.toArray(new String[apks.size()]);
+         return vals[random.nextInt(vals.length)];
+      }
+      else
+      {
+         return getData(type, row, true);
+      }
+   }
+
+   /**
+    * Delete primary key
+    * @param table The table
+    * @param pk The primary key
+    */
+   private static void deletePrimaryKey(String table, String pk) throws Exception
+   {
+      TreeSet<String> apks = activePKs.get(table);
+
+      if (apks != null)
+      {
+         apks.remove(pk);
+         activePKs.put(table, apks);
+      }
+   }
+
+   /**
+    * Get rows for a table
+    * @param table The table name
+    * @return The number of rows
+    */
+   private static int getRows(String table)
+   {
+      int defaultRows = profile.getProperty("rows") != null ?
+         Integer.parseInt(profile.getProperty("rows")) : DEFAULT_ROWS;
+
+      int rows = profile.getProperty(table + ".rows") != null ?
+         Integer.parseInt(profile.getProperty(table + ".rows")) : defaultRows;
+
+      return rows;
+   }
+
+   /**
     * Get data
     * @param type The type
     * @param row Hint for row number
@@ -962,7 +1088,7 @@ public class SQLLoadGenerator
          case "int4":
             if (r)
             {
-               return Integer.toString(random.nextInt(DEFAULT_ROWS));
+               return Integer.toString(random.nextInt(Integer.MAX_VALUE));
             }
             else
             {
@@ -972,7 +1098,7 @@ public class SQLLoadGenerator
          case "decimal":
             if (r)
             {
-               return new java.math.BigDecimal(random.nextInt(DEFAULT_ROWS)).toPlainString();
+               return new java.math.BigDecimal(random.nextInt(Integer.MAX_VALUE)).toPlainString();
             }
             else
             {

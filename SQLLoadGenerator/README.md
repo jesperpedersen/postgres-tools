@@ -178,8 +178,6 @@ Define the column as the primary key for column number Y in table X. Example
 test.col.1.primarykey=true
 ```
 
-Note, that workload ```INSERT```s will be disabled.
-
 ### X.rows
 
 The number of rows for table X. Example
