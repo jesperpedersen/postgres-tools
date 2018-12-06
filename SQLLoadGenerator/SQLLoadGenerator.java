@@ -143,12 +143,12 @@ public class SQLLoadGenerator
             List<String> colTypes = new ArrayList<>();
             List<String> colDescriptions = new ArrayList<>();
             
-            while (profile.getProperty(tableName + ".col." + counter) != null)
+            while (profile.getProperty(tableName + ".column." + counter) != null)
             {
-               String name = profile.getProperty(tableName + ".col." + counter);
-               String type = profile.getProperty(tableName + ".col." + counter + ".type");
-               String desc = profile.getProperty(tableName + ".col." + counter + ".description");
-               String pk = profile.getProperty(tableName + ".col." + counter + ".primarykey");
+               String name = profile.getProperty(tableName + ".column." + counter);
+               String type = profile.getProperty(tableName + ".column." + counter + ".type");
+               String desc = profile.getProperty(tableName + ".column." + counter + ".description");
+               String pk = profile.getProperty(tableName + ".column." + counter + ".primarykey");
 
                if (type == null)
                   type = "int";

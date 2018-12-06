@@ -142,40 +142,40 @@ Define a table called X. Example
 table.test=This is test table
 ```
 
-### X.col.Y
+### X.column.Y
 
 Define a column number Y for table X. Example
 
 ```
-test.col.1=a
+test.column.1=a
 ```
 
 Column 1 is the default table identifier if no primary key is defined.
 
-### X.col.Y.type
+### X.column.Y.type
 
 Define the column type for column number Y in table X. Example
 
 ```
-test.col.1.type=text
+test.column.1.type=text
 ```
 
 Default data type is ```int```.
 
-### X.col.Y.description
+### X.column.Y.description
 
 Define the column description for column number Y in table X. Example
 
 ```
-test.col.1.description=This is my column
+test.column.1.description=This is my column
 ```
 
-### X.col.Y.primarykey
+### X.column.Y.primarykey
 
 Define the column as the primary key for column number Y in table X. Example
 
 ```
-test.col.1.primarykey=true
+test.column.1.primarykey=true
 ```
 
 ### X.rows
