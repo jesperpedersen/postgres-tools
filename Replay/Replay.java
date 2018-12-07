@@ -888,6 +888,10 @@ public class Replay
          for (Client cli : clients)
          {
             cli.run();
+            if (!cli.isSuccess() && !error)
+            {
+               break;
+            }
          }
          end = System.currentTimeMillis();
       }
