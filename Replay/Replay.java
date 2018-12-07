@@ -41,6 +41,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -779,6 +780,7 @@ public class Replay
                                                     return filename.endsWith(".cli");
                                                  }
                                               });
+      Arrays.sort(clientData);
 
       List<Client> clients = new ArrayList<>(clientData.length);
       CountDownLatch clientReady = new CountDownLatch(clientData.length);
