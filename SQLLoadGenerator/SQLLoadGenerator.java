@@ -95,8 +95,17 @@ public class SQLLoadGenerator
    /** Primary keys   Table   Column */
    private static Map<String, String> primaryKeys = new TreeMap<>();
 
-   /** Active PKs     Table           PKs */
-   private static Map<String, TreeSet<String>> activePKs = new TreeMap<>();
+   /** Active PKs     Table       Client           PKs */
+   private static Map<String, Map<Integer, TreeSet<String>>> activePKs = new TreeMap<>();
+
+   /** Foreign keys   Table           Column */
+   private static Map<String, TreeSet<String>> foreignKeys = new TreeMap<>();
+
+   /** FromTo         Table           Table */
+   private static Map<String, TreeSet<String>> fromTo = new TreeMap<>();
+
+   /** ToFrom         Table           Table */
+   private static Map<String, TreeSet<String>> toFrom = new TreeMap<>();
 
    /**
     * Write data to a file
@@ -127,6 +136,7 @@ public class SQLLoadGenerator
    {
       List<String> l = new ArrayList<>();
       Enumeration<?> e = profile.propertyNames();
+      List<String> alter = new ArrayList<>();
 
       // Tables
       while (e.hasMoreElements())
@@ -149,6 +159,8 @@ public class SQLLoadGenerator
                String type = profile.getProperty(tableName + ".column." + counter + ".type");
                String desc = profile.getProperty(tableName + ".column." + counter + ".description");
                String pk = profile.getProperty(tableName + ".column." + counter + ".primarykey");
+               String fkTable = profile.getProperty(tableName + ".column." + counter + ".foreignkey.table");
+               String fkColumn = profile.getProperty(tableName + ".column." + counter + ".foreignkey.column");
 
                if (type == null)
                   type = "int";
@@ -182,6 +194,55 @@ public class SQLLoadGenerator
                         throw new Exception("Already have primary key \'" + primaryKey + "\' on table " + tableName);
                      }
                   }
+               }
+
+               if (fkTable != null && fkColumn != null)
+               {
+                  TreeSet<String> ts = foreignKeys.get(tableName);
+
+                  if (ts == null)
+                     ts = new TreeSet<>();
+
+                  ts.add(name + ":" + fkTable + ":" + fkColumn);
+                  foreignKeys.put(tableName, ts);
+
+                  ts = fromTo.get(tableName);
+
+                  if (ts == null)
+                     ts = new TreeSet<>();
+
+                  ts.add(fkTable);
+                  fromTo.put(tableName, ts);
+
+                  ts = toFrom.get(fkTable);
+
+                  if (ts == null)
+                     ts = new TreeSet<>();
+
+                  ts.add(tableName);
+                  toFrom.put(fkTable, ts);
+
+                  StringBuilder sb = new StringBuilder();
+                  sb.append("ALTER TABLE ONLY ");
+                  sb.append(tableName);
+                  sb.append(" ADD CONSTRAINT ");
+                  sb.append("fk_");
+                  sb.append(tableName);
+                  sb.append("_");
+                  sb.append(name);
+                  sb.append("_");
+                  sb.append(fkTable);
+                  sb.append("_");
+                  sb.append(fkColumn);
+                  sb.append(" FOREIGN KEY (");
+                  sb.append(name);
+                  sb.append(") REFERENCES ");
+                  sb.append(fkTable);
+                  sb.append("(");
+                  sb.append(fkColumn);
+                  sb.append(");");
+
+                  alter.add(sb.toString());
                }
 
                colNames.add(name);
@@ -253,6 +314,9 @@ public class SQLLoadGenerator
          }
       }
       
+      if (alter.size() > 0)
+         l.addAll(alter);
+
       e = profile.propertyNames();
 
       // Indexes
@@ -309,53 +373,100 @@ public class SQLLoadGenerator
    {
       List<String> l = new ArrayList<>();
 
-      for (Map.Entry<String, List<String>> entry : columnNames.entrySet())
+      // No dependencies
+      for (String tableName : columnNames.keySet())
       {
-         String tableName = entry.getKey();
-         List<String> colNames = entry.getValue();
-         List<String> colTypes = columnTypes.get(tableName);
-         int rows = getRows(tableName);
-         String pk = primaryKeys.get(tableName);
-
-         for (int row = 1; row <= rows; row++)
+         if (!fromTo.containsKey(tableName))
          {
-            StringBuilder sb = new StringBuilder();
-            sb.append("INSERT INTO ");
-            sb.append(tableName);
-            sb.append(" (");
-            for (int i = 0; i < colNames.size(); i++)
-            {
-               sb.append(colNames.get(i));
-               if (i < colNames.size() - 1)
-                  sb.append(", ");
-            }
-            sb.append(") VALUES (");
-            for (int i = 0; i < colTypes.size(); i++)
-            {
-               if (mustEscape(colTypes.get(i)))
-                  sb.append("\'");
-               if (pk != null && colNames.get(i).equals(pk))
-               {
-                  sb.append(generatePrimaryKey(tableName, colTypes.get(i), row, false));
-               }
-               else
-               {
-                  sb.append(getData(colTypes.get(i), row, i == 0 ? false : true));
-               }
-               if (mustEscape(colTypes.get(i)))
-                  sb.append("\'");
-               if (i < colTypes.size() - 1)
-                  sb.append(", ");
-            }
-            sb.append(");");
-            
-            l.add(sb.toString());
+            l.addAll(getINSERT(tableName));
+            l.add("");
+         }
+      }
+
+      // Dependencies
+      for (String tableName : columnNames.keySet())
+      {
+         if (fromTo.containsKey(tableName))
+         {
+            l.addAll(getINSERT(tableName));
+            l.add("");
          }
       }
       
-      l.add("");
       l.add("ANALYZE;");
       writeFile(Paths.get(profileName, "data.sql"), l);
+   }
+
+   /**
+    * Get INSERTs for a table
+    * @param tableName The name of the table
+    * @return The INSERT data
+    */
+   private static List<String> getINSERT(String tableName) throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      List<String> colNames = columnNames.get(tableName);
+      List<String> colTypes = columnTypes.get(tableName);
+      int rows = getRows(tableName);
+
+      for (int row = 1; row <= rows; row++)
+      {
+         StringBuilder sb = new StringBuilder();
+         sb.append("INSERT INTO ");
+         sb.append(tableName);
+         sb.append(" (");
+         for (int i = 0; i < colNames.size(); i++)
+         {
+            sb.append(colNames.get(i));
+            if (i < colNames.size() - 1)
+               sb.append(", ");
+         }
+         sb.append(") VALUES (");
+         for (int i = 0; i < colTypes.size(); i++)
+         {
+            if (mustEscape(colTypes.get(i)))
+               sb.append("\'");
+            if (isPrimaryKey(tableName, colNames.get(i)))
+            {
+               sb.append(generatePrimaryKey(0, tableName, colTypes.get(i), row, false));
+            }
+            else if (isForeignKey(tableName, colNames.get(i)))
+            {
+               sb.append(generateForeignKey(0, tableName, colNames.get(i)));
+            }
+            else
+            {
+               String data = getData(colTypes.get(i), row, i == 0 ? false : true);
+               sb.append(data);
+               if (i == 0)
+               {
+                  Map<Integer, TreeSet<String>> m = activePKs.get(tableName);
+
+                  if (m == null)
+                     m = new TreeMap<>();
+
+                  TreeSet<String> gen = m.get(Integer.valueOf(0));
+
+                  if (gen == null)
+                     gen = new TreeSet<>();
+
+                  gen.add(data);
+                  m.put(Integer.valueOf(0), gen);
+                  activePKs.put(tableName, m);
+               }
+            }
+            if (mustEscape(colTypes.get(i)))
+               sb.append("\'");
+            if (i < colTypes.size() - 1)
+               sb.append(", ");
+         }
+         sb.append(");");
+
+         l.add(sb.toString());
+      }
+
+      return l;
    }
 
    /**
@@ -482,28 +593,28 @@ public class SQLLoadGenerator
                {
                   case 0:
                   {
-                     result = generateSELECT(table, colNames, colTypes);
+                     result = generateSELECT(i, table, colNames, colTypes);
                      totalSelect++;
                      select++;
                      break;
                   }
                   case 1:
                   {
-                     result = generateUPDATE(table, colNames, colTypes);
+                     result = generateUPDATE(i, table, colNames, colTypes);
                      totalUpdate++;
                      update++;
                      break;
                   }
                   case 2:
                   {
-                     result = generateINSERT(table, colNames, colTypes);
+                     result = generateINSERT(i, table, colNames, colTypes);
                      totalInsert++;
                      insert++;
                      break;
                   }
                   case 3:
                   {
-                     result = generateDELETE(table, colNames, colTypes);
+                     result = generateDELETE(i, table, colNames, colTypes);
                      totalDelete++;
                      delete++;
                      break;
@@ -562,7 +673,7 @@ public class SQLLoadGenerator
    /**
     * Generate SELECT statement
     */
-   private static List<String> generateSELECT(String table, List<String> colNames, List<String> colTypes)
+   private static List<String> generateSELECT(int client, String table, List<String> colNames, List<String> colTypes)
       throws Exception
    {
       List<String> result = new ArrayList<>(3);
@@ -596,13 +707,14 @@ public class SQLLoadGenerator
    /**
     * Generate UPDATE statement
     */
-   private static List<String> generateUPDATE(String table, List<String> colNames, List<String> colTypes)
+   private static List<String> generateUPDATE(int client, String table, List<String> colNames, List<String> colTypes)
       throws Exception
    {
       List<String> result = new ArrayList<>(3);
       String pk = primaryKeys.get(table);
       int index = 0;
       int rows = getRows(table);
+      int updated = 0;
 
       if (pk != null)
          index = colNames.indexOf(pk);
@@ -615,21 +727,29 @@ public class SQLLoadGenerator
       {
          if (pk == null && col != 0)
          {
-            sql.append(colNames.get(col));
-            sql.append(" = ?");
+            if (!isForeignKey(table, colNames.get(col)))
+            {
+               sql.append(colNames.get(col));
+               sql.append(" = ?");
+               updated++;
 
-            if (col < colNames.size() - 1)
-               sql.append(", ");
+               if (col < colNames.size() - 1)
+                  sql.append(", ");
+            }
          }
          else
          {
             if (col != index)
             {
-               sql.append(colNames.get(col));
-               sql.append(" = ?");
+               if (!isForeignKey(table, colNames.get(col)))
+               {
+                  sql.append(colNames.get(col));
+                  sql.append(" = ?");
+                  updated++;
 
-               if (col < colNames.size() - 1)
-                  sql.append(", ");
+                  if (col < colNames.size() - 1)
+                     sql.append(", ");
+               }
             }
          }
       }
@@ -639,22 +759,31 @@ public class SQLLoadGenerator
                
       result.add(sql.toString());
 
+      if (updated == 0)
+         return null;
+
       StringBuilder types = new StringBuilder();
       for (int col = 0; col < colNames.size(); col++)
       {
          if (pk == null && col != 0)
          {
-            types.append(getJavaType(colTypes.get(col)));
-            if (col < colNames.size() - 1)
-               types.append("|");
+            if (!isForeignKey(table, colNames.get(col)))
+            {
+               types.append(getJavaType(colTypes.get(col)));
+               if (col < colNames.size() - 1)
+                  types.append("|");
+            }
          }
          else
          {
             if (col != index)
             {
-               types.append(getJavaType(colTypes.get(col)));
-               if (col < colNames.size() - 1)
-                  types.append("|");
+               if (!isForeignKey(table, colNames.get(col)))
+               {
+                  types.append(getJavaType(colTypes.get(col)));
+                  if (col < colNames.size() - 1)
+                     types.append("|");
+               }
             }
          }
       }
@@ -669,23 +798,36 @@ public class SQLLoadGenerator
       {
          if (pk == null && col != 0)
          {
-            values.append(getData(colTypes.get(col), random.nextInt(rows)));
-            if (col < colNames.size() - 1)
-               values.append("|");
-         }
-         else
-         {
-            if (col != index)
+            if (!isForeignKey(table, colNames.get(col)))
             {
                values.append(getData(colTypes.get(col), random.nextInt(rows)));
                if (col < colNames.size() - 1)
                   values.append("|");
             }
          }
+         else
+         {
+            if (col != index)
+            {
+               if (!isForeignKey(table, colNames.get(col)))
+               {
+                  values.append(getData(colTypes.get(col), random.nextInt(rows)));
+                  if (col < colNames.size() - 1)
+                     values.append("|");
+               }
+            }
+         }
       }
       if (colNames.size() > 1)
          values.append("|");
-      values.append(getData(colTypes.get(index), random.nextInt(rows)));
+      if (pk != null)
+      {
+         values.append(getPrimaryKey(client, table));
+      }
+      else
+      {
+         values.append(getData(colTypes.get(index), random.nextInt(rows)));
+      }
       
       result.add(values.toString());
 
@@ -695,7 +837,7 @@ public class SQLLoadGenerator
    /**
     * Generate INSERT statement
     */
-   private static List<String> generateINSERT(String table, List<String> colNames, List<String> colTypes)
+   private static List<String> generateINSERT(int client, String table, List<String> colNames, List<String> colTypes)
       throws Exception
    {
       List<String> result = new ArrayList<>(3);
@@ -720,10 +862,14 @@ public class SQLLoadGenerator
       {
          String colType = colTypes.get(i);
          sql.append("?");
-         types.append(getJavaType(colTypes.get(i)));
-         if (pk != null && colNames.get(i).equals(pk))
+         types.append(getJavaType(colType));
+         if (isPrimaryKey(table, colNames.get(i)))
          {
-            values.append(generatePrimaryKey(table, colType));
+            values.append(generatePrimaryKey(client, table, colType));
+         }
+         else if (isForeignKey(table, colNames.get(i)))
+         {
+            values.append(generateForeignKey(client, table, colNames.get(i)));
          }
          else
          {
@@ -748,13 +894,17 @@ public class SQLLoadGenerator
    /**
     * Generate DELETE statement
     */
-   private static List<String> generateDELETE(String table, List<String> colNames, List<String> colTypes)
+   private static List<String> generateDELETE(int client, String table, List<String> colNames, List<String> colTypes)
       throws Exception
    {
       List<String> result = new ArrayList<>(3);
       String pk = primaryKeys.get(table);
       int index = 0;
       int rows = getRows(table);
+      boolean ret = true;
+
+      if (toFrom.containsKey(table))
+         return null;
 
       if (pk != null)
          index = colNames.indexOf(pk);
@@ -770,14 +920,17 @@ public class SQLLoadGenerator
       result.add(getJavaType(colTypes.get(index)));
       if (pk != null)
       {
-         String value = getPrimaryKey(table, colTypes.get(index), random.nextInt(rows));
-         deletePrimaryKey(table, value);
+         String value = getPrimaryKey(client, table);
+         ret = deletePrimaryKey(client, table, value);
          result.add(value);
       }
       else
       {
          result.add(getData(colTypes.get(index), random.nextInt(rows)));
       }
+
+      if (!ret)
+         return null;
 
       return result;
    }
@@ -912,88 +1065,191 @@ public class SQLLoadGenerator
    }
 
    /**
-    * Generate primary key
+    * Is primary key
     * @param table The table
-    * @param type The type
+    * @param col The col
+    * @return True if primary key, otherwise false
     */
-   private static String generatePrimaryKey(String table, String type) throws Exception
+   private static boolean isPrimaryKey(String table, String col)
    {
-      return generatePrimaryKey(table, type, random.nextInt(Integer.MAX_VALUE));
+      String pk = primaryKeys.get(table);
+
+      if (pk == null)
+         return false;
+
+      return pk.equals(col);
    }
 
    /**
     * Generate primary key
+    * @param client The client
+    * @param table The table
+    * @param type The type
+    */
+   private static String generatePrimaryKey(int client, String table, String type) throws Exception
+   {
+      return generatePrimaryKey(client, table, type, random.nextInt(Integer.MAX_VALUE));
+   }
+
+   /**
+    * Generate primary key
+    * @param client The client
     * @param table The table
     * @param type The type
     * @param row Hint for row number
     */
-   private static String generatePrimaryKey(String table, String type, int row) throws Exception
+   private static String generatePrimaryKey(int client, String table, String type, int row) throws Exception
    {
-      return generatePrimaryKey(table, type, row, true);
+      return generatePrimaryKey(client, table, type, row, true);
    }
 
    /**
     * Generate primary key
+    * @param client The client
     * @param table The table
     * @param type The type
     * @param row Hint for row number
     * @param r Random
     */
-   private static String generatePrimaryKey(String table, String type, int row, boolean r) throws Exception
+   private static String generatePrimaryKey(int client, String table, String type, int row, boolean r) throws Exception
    {
       String newpk = getData(type, row, r);
-      TreeSet<String> apks = activePKs.get(table);
+      Map<Integer, TreeSet<String>> m = activePKs.get(table);
+
+      if (m == null)
+         m = new TreeMap<>();
+
+      TreeSet<String> gen = m.get(Integer.valueOf(0));
+      TreeSet<String> apks = m.get(Integer.valueOf(client));
+
+      if (gen == null)
+         gen = new TreeSet<>();
 
       if (apks == null)
          apks = new TreeSet<>();
 
-      while (apks.contains(newpk))
+      if (client == 0)
       {
-         newpk = getData(type, row, r);
+         while (gen.contains(newpk))
+         {
+            newpk = getData(type, row, r);
+         }
+         gen.add(newpk);
+      }
+      else
+      {
+         while (gen.contains(newpk) || apks.contains(newpk))
+         {
+            newpk = getData(type, row, r);
+         }
+         apks.add(newpk);
       }
 
-      apks.add(newpk);
-      activePKs.put(table, apks);
+      m.put(Integer.valueOf(0), gen);
+      if (client != 0)
+         m.put(Integer.valueOf(client), apks);
+      activePKs.put(table, m);
 
       return newpk;
    }
 
    /**
     * Get a random primary key
+    * @param client The client
     * @param table The table
     * @param type The type
     * @param row Hint for row number
     * @return The primary key
     */
-   private static String getPrimaryKey(String table, String type, int row) throws Exception
+   private static String getPrimaryKey(int client, String table) throws Exception
    {
-      TreeSet<String> apks = activePKs.get(table);
+      Map<Integer, TreeSet<String>> m = activePKs.get(table);
+      TreeSet<String> apks = m.get(Integer.valueOf(client));
 
-      if (apks != null)
-      {
-         String[] vals = apks.toArray(new String[apks.size()]);
-         return vals[random.nextInt(vals.length)];
-      }
-      else
-      {
-         return getData(type, row, true);
-      }
+      if (apks == null || apks.size() == 0)
+         apks = m.get(Integer.valueOf(0));
+
+      String[] vals = apks.toArray(new String[apks.size()]);
+      return vals[random.nextInt(vals.length)];
    }
 
    /**
     * Delete primary key
+    * @param client The client
     * @param table The table
     * @param pk The primary key
+    * @return True if the primary key was deleted, otherwise false
     */
-   private static void deletePrimaryKey(String table, String pk) throws Exception
+   private static boolean deletePrimaryKey(int client, String table, String pk) throws Exception
    {
-      TreeSet<String> apks = activePKs.get(table);
+      Map<Integer, TreeSet<String>> m = activePKs.get(table);
+      TreeSet<String> apks = m.get(Integer.valueOf(client));
 
-      if (apks != null)
+      if (apks == null || apks.size() == 0)
+         return false;
+
+      apks.remove(pk);
+      m.put(Integer.valueOf(client), apks);
+      activePKs.put(table, m);
+      return true;
+   }
+
+   /**
+    * Is foreign key
+    * @param table The table
+    * @param col The col
+    * @return True if foreign key, otherwise false
+    */
+   private static boolean isForeignKey(String table, String col)
+   {
+      TreeSet<String> ts = foreignKeys.get(table);
+
+      if (ts == null)
+         return false;
+
+      for (String data : ts)
       {
-         apks.remove(pk);
-         activePKs.put(table, apks);
+         String c = data.substring(0, data.indexOf(":"));
+         if (c.equals(col))
+            return true;
       }
+
+      return false;
+   }
+
+   /**
+    * Generate foreign key
+    * @param table The table
+    * @param col The column
+    * @return The foreign key
+    */
+   private static String generateForeignKey(int client, String table, String col)
+   {
+      TreeSet<String> ts = foreignKeys.get(table);
+
+      for (String data : ts)
+      {
+         int index1 = data.indexOf(":");
+
+         String c = data.substring(0, index1);
+         if (c.equals(col))
+         {
+            int index2 = data.lastIndexOf(":");
+            String fkTable = data.substring(index1 + 1, index2);
+            String fkCol = data.substring(index2 + 1);
+
+            Map<Integer, TreeSet<String>> m = activePKs.get(fkTable);
+            TreeSet<String> apks = m.get(Integer.valueOf(client));
+
+            if (apks == null || apks.size() == 0)
+               apks = m.get(Integer.valueOf(0));
+
+            String[] vals = apks.toArray(new String[apks.size()]);
+            return vals[random.nextInt(vals.length)];
+         }
+      }
+
+      return "";
    }
 
    /**

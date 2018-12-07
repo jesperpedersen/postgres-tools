@@ -178,6 +178,27 @@ Define the column as the primary key for column number Y in table X. Example
 test.column.1.primarykey=true
 ```
 
+### X.column.Y.foreignkey.table
+
+Define the column Y in table X as a foreign key to another table. Example
+
+```
+test.column.1.foreignkey.table=anothertable
+```
+
+Must be used together with `X.column.Y.foreignkey.column`.
+
+### X.column.Y.foreignkey.column
+
+Define the column Y in table X as a foreign key to another table's column. Example
+
+```
+test.column.1.foreignkey.column=id
+```
+
+Must be used together with `X.column.Y.foreignkey.table`, and must reference
+the table's primary key or leading column.
+
 ### X.rows
 
 The number of rows for table X. Example
