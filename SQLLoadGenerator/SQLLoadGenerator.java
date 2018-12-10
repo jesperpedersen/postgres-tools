@@ -1298,7 +1298,14 @@ public class SQLLoadGenerator
       int size = 0;
       if (base.indexOf("(") != -1)
       {
-         size = Integer.parseInt(base.substring(base.indexOf("(") + 1, base.indexOf(")")));
+         if (base.indexOf(",") == -1)
+         {
+            size = Integer.parseInt(base.substring(base.indexOf("(") + 1, base.indexOf(")")));
+         }
+         else
+         {
+            size = Integer.parseInt(base.substring(base.indexOf("(") + 1, base.indexOf(",")));
+         }
          base = base.substring(0, base.indexOf("("));
       }
       switch (base.toLowerCase().trim())
