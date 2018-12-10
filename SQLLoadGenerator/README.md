@@ -216,6 +216,14 @@ Define the column as `NOT NULL` for column number Y in table X. Example
 test.column.2.notnull=true
 ```
 
+### X.column.Y.unique
+
+Define the column as `UNIQUE` for column number Y in table X. Example
+
+```
+test.column.3.unique=true
+```
+
 ### X.rows
 
 The number of rows for table X. Example

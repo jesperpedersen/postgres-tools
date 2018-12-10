@@ -119,6 +119,9 @@ public class SQLLoadGenerator
    /** NOT NULL       Table           Column */
    private static Map<String, TreeSet<String>> notNulls = new TreeMap<>();
 
+   /** UNIQUE         Table       Column          Value */
+   private static Map<String, Map<String, TreeSet<String>>> uniques = new TreeMap<>();
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -174,6 +177,7 @@ public class SQLLoadGenerator
                String fkTable = profile.getProperty(tableName + ".column." + counter + ".foreignkey.table");
                String fkColumn = profile.getProperty(tableName + ".column." + counter + ".foreignkey.column");
                String notnull = profile.getProperty(tableName + ".column." + counter + ".notnull");
+               String unique = profile.getProperty(tableName + ".column." + counter + ".unique");
 
                if (type == null)
                   type = "int";
@@ -269,6 +273,39 @@ public class SQLLoadGenerator
 
                      ts.add(name);
                      notNulls.put(tableName, ts);
+                  }
+               }
+
+               if (unique != null && !"".equals(unique.trim()))
+               {
+                  if (Boolean.parseBoolean(unique))
+                  {
+                     Map<String, TreeSet<String>> m = uniques.get(tableName);
+
+                     if (m == null)
+                        m = new TreeMap<>();
+
+                     TreeSet<String> ts = m.get(name);
+
+                     if (ts == null)
+                        ts = new TreeSet<>();
+
+                     m.put(name, ts);
+                     uniques.put(tableName, m);
+
+                     StringBuilder sb = new StringBuilder();
+                     sb.append("ALTER TABLE ONLY ");
+                     sb.append(tableName);
+                     sb.append(" ADD CONSTRAINT ");
+                     sb.append("uniq_");
+                     sb.append(tableName);
+                     sb.append("_");
+                     sb.append(name);
+                     sb.append(" UNIQUE (");
+                     sb.append(name);
+                     sb.append(");");
+
+                     alter.add(sb.toString());
                   }
                }
 
@@ -467,6 +504,10 @@ public class SQLLoadGenerator
             {
                val = generateForeignKey(0, tableName, colNames.get(i));
             }
+            else if (isUnique(tableName, colNames.get(i)))
+            {
+               val = generateUnique(tableName, colNames.get(i), colTypes.get(i));
+            }
             else
             {
                val = getData(tableName, colNames.get(i), colTypes.get(i), row, i == 0 ? false : true);
@@ -479,6 +520,10 @@ public class SQLLoadGenerator
                sb.append(val);
             }
             else if (isForeignKey(tableName, colNames.get(i)))
+            {
+               sb.append(val);
+            }
+            else if (isUnique(tableName, colNames.get(i)))
             {
                sb.append(val);
             }
@@ -773,7 +818,7 @@ public class SQLLoadGenerator
       {
          if (pk == null && col != 0)
          {
-            if (!isForeignKey(table, colNames.get(col)))
+            if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
             {
                sql.append(colNames.get(col));
                sql.append(" = ?");
@@ -787,7 +832,7 @@ public class SQLLoadGenerator
          {
             if (col != index)
             {
-               if (!isForeignKey(table, colNames.get(col)))
+               if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
                {
                   sql.append(colNames.get(col));
                   sql.append(" = ?");
@@ -813,7 +858,7 @@ public class SQLLoadGenerator
       {
          if (pk == null && col != 0)
          {
-            if (!isForeignKey(table, colNames.get(col)))
+            if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
             {
                types.append(getJavaType(colTypes.get(col)));
                if (col < colNames.size() - 1)
@@ -824,7 +869,7 @@ public class SQLLoadGenerator
          {
             if (col != index)
             {
-               if (!isForeignKey(table, colNames.get(col)))
+               if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
                {
                   types.append(getJavaType(colTypes.get(col)));
                   if (col < colNames.size() - 1)
@@ -844,7 +889,7 @@ public class SQLLoadGenerator
       {
          if (pk == null && col != 0)
          {
-            if (!isForeignKey(table, colNames.get(col)))
+            if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
             {
                values.append(getData(table, colNames.get(col), colTypes.get(col), random.nextInt(rows)));
                if (col < colNames.size() - 1)
@@ -855,7 +900,7 @@ public class SQLLoadGenerator
          {
             if (col != index)
             {
-               if (!isForeignKey(table, colNames.get(col)))
+               if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
                {
                   values.append(getData(table, colNames.get(col), colTypes.get(col), random.nextInt(rows)));
                   if (col < colNames.size() - 1)
@@ -916,6 +961,10 @@ public class SQLLoadGenerator
          else if (isForeignKey(table, colNames.get(i)))
          {
             values.append(generateForeignKey(client, table, colNames.get(i)));
+         }
+         else if (isUnique(table, colNames.get(i)))
+         {
+            values.append(generateUnique(table, colNames.get(i), colType));
          }
          else
          {
@@ -1334,6 +1383,52 @@ public class SQLLoadGenerator
          Integer.parseInt(profile.getProperty(table + ".notnull")) : defaultNotNull;
 
       return notnull;
+   }
+
+   /**
+    * Is unique
+    * @param table The table
+    * @param col The col
+    * @return True if UNIQUE, otherwise false
+    */
+   private static boolean isUnique(String table, String col)
+   {
+      Map<String, TreeSet<String>> m = uniques.get(table);
+
+      if (m == null)
+         return false;
+
+      return m.containsKey(col);
+   }
+
+   /**
+    * Generate unique value
+    * @param table The table
+    * @param name The column name
+    * @param type The type
+    */
+   private static String generateUnique(String table, String name, String type) throws Exception
+   {
+      String val = getData(table, name, type, Integer.MAX_VALUE, true);
+      Map<String, TreeSet<String>> m = uniques.get(table);
+
+      if (m == null)
+         m = new TreeMap<>();
+
+      TreeSet<String> values = m.get(name);
+
+      if (values == null)
+         values = new TreeSet<>();
+
+      while (values.contains(val))
+      {
+         val = getData(table, name, type, Integer.MAX_VALUE, true);
+      }
+
+      m.put(name, values);
+      uniques.put(table, m);
+
+      return val;
    }
 
    /**
