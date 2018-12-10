@@ -80,8 +80,14 @@ public class SQLLoadGenerator
    /** Default ROLLBACK */
    private static final int DEFAULT_ROLLBACK = 0;
 
+   /** Default scale */
+   private static final double DEFAULT_SCALE = 1.0;
+
    /** Profile */
    private static Properties profile;
+
+   /** Scale */
+   private static double scale = 1.0;
 
    /** Random */
    private static Random random = new Random();
@@ -1265,7 +1271,7 @@ public class SQLLoadGenerator
       int rows = profile.getProperty(table + ".rows") != null ?
          Integer.parseInt(profile.getProperty(table + ".rows")) : defaultRows;
 
-      return rows;
+      return (int)(scale * rows);
    }
 
    /**
@@ -1474,25 +1480,35 @@ public class SQLLoadGenerator
    {
       try
       {
-         if (args.length == 1 || args.length > 2)
+         if (args.length == 1 || args.length > 4)
          {
-            System.out.println("Usage: SQLLoadGenerator [-c configuration.properties]");
+            System.out.println("Usage: SQLLoadGenerator [-s scale] [-c configuration.properties]");
             return;
          }
          
          String s = DEFAULT_PROFILE;
          if (args.length >= 1)
          {
-            if (!"-c".equals(args[0]))
+            if (!"-c".equals(args[0]) && !"-s".equals(args[0]))
                throw new Exception("Unknown option: " + args[0]);
          }
-         if (args.length == 2)
+         if (args.length >= 2)
          {
-            s = args[1];
-            if (s.endsWith(".properties"))
-               s = s.substring(0, s.lastIndexOf("."));
+            for (int parameter = 0; parameter < args.length - 1; parameter++)
+            {
+               if ("-s".equals(args[parameter]))
+               {
+                  scale = Double.valueOf(args[++parameter]);
+               }
+               else if ("-c".equals(args[parameter]))
+               {
+                  s = args[++parameter];
+                  if (s.endsWith(".properties"))
+                     s = s.substring(0, s.lastIndexOf("."));
+               }
+            }
          }
-         
+
          profile = new Properties();
          InputStream input = new FileInputStream(s + ".properties");
          profile.load(input);

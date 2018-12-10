@@ -26,6 +26,11 @@ cd /path/to/work_area
 /path/to/java SQLLoadGenerator
 ```
 
+SQLLoadGenerator supports the following options
+
+* `-s`: Scale factor for number of rows
+* `-c`: Name of the profile that should be used
+
 ## Configuration
 
 The configuration of SQLLoadGenerator is done in the ```sqlloadgenerator.properties``` file, which supports the following
