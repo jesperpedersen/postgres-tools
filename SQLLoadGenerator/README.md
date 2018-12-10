@@ -139,6 +139,10 @@ The global mix for ```COMMIT``` transactions.  Default is ```100```.
 
 The global mix for ```ROLLBACK``` transactions.  Default is ```0```.
 
+### notnull
+
+The global `NOT NULL` target. Default is ```100```.
+
 ### table.X
 
 Define a table called X. Example
@@ -211,6 +215,10 @@ The number of rows for table X. Example
 ```
 test.rows=1000000
 ```
+
+### X.notnull
+
+The `NOT NULL` target for the table. Default is ```100```.
 
 ### index.X.Y
 
