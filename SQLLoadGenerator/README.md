@@ -208,6 +208,14 @@ test.column.1.foreignkey.column=id
 Must be used together with `X.column.Y.foreignkey.table`, and must reference
 the table's primary key or leading column.
 
+### X.column.Y.notnull
+
+Define the column as `NOT NULL` for column number Y in table X. Example
+
+```
+test.column.2.notnull=true
+```
+
 ### X.rows
 
 The number of rows for table X. Example
