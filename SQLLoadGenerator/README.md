@@ -236,6 +236,38 @@ test.rows=1000000
 
 The `NOT NULL` target for the table. Default is ```100```.
 
+### X.mix.select
+
+The mix of ```SELECT``` for a specific table. Example
+
+```
+test.mix.select=40
+```
+
+### X.mix.update
+
+The mix of ```UPDATE``` for a specific table. Example
+
+```
+test.mix.update=20
+```
+
+### X.mix.insert
+
+The mix of ```INSERT``` for a specific table. Example
+
+```
+test.mix.insert=40
+```
+
+### X.mix.delete
+
+The mix of ```DELETE``` for a specific table. Example
+
+```
+test.mix.delete=0
+```
+
 ### index.X.Y
 
 Define an index for table X. Example

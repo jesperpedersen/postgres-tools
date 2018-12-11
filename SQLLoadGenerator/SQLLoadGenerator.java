@@ -660,24 +660,45 @@ public class SQLLoadGenerator
                int type = 0;
                List<String> result = null;
 
-               int m = random.nextInt(cMixSelect + cMixUpdate + cMixInsert + cMixDelete + 1);
-               if (m <= mixSelect)
+               int tMixSelect = profile.getProperty(table + ".mix.select") != null ?
+                  Integer.parseInt(profile.getProperty(table + ".mix.select")) : cMixSelect;
+               int tMixUpdate = profile.getProperty(table + ".mix.update") != null ?
+                  Integer.parseInt(profile.getProperty(table + ".mix.update")) : cMixUpdate;
+               int tMixInsert = profile.getProperty(table + ".mix.insert") != null ?
+                  Integer.parseInt(profile.getProperty(table + ".mix.insert")) : cMixInsert;
+               int tMixDelete = profile.getProperty(table + ".mix.delete") != null ?
+                  Integer.parseInt(profile.getProperty(table + ".mix.delete")) : cMixDelete;
+
+               int size = tMixSelect + tMixUpdate + tMixInsert + tMixDelete;
+               int[] tDistribution = new int[size];
+               for (int ti = 0; ti < tMixSelect; ti++)
                {
+                  tDistribution[ti] = 0;
+               }
+               for (int ti = 0; ti < tMixUpdate; ti++)
+               {
+                  tDistribution[ti + tMixSelect] = 1;
+               }
+               for (int ti = 0; ti < tMixInsert; ti++)
+               {
+                  tDistribution[ti + tMixSelect + tMixUpdate] = 2;
+               }
+               for (int ti = 0; ti < tMixDelete; ti++)
+               {
+                  tDistribution[ti + tMixSelect + tMixUpdate + tMixDelete] = 3;
+               }
+
+               type = tDistribution[random.nextInt(cMixSelect + cMixUpdate + cMixInsert + cMixDelete)];
+
+               if (type == 1 && colNames.size() <= 1)
                   type = 0;
-               }
-               else if (m <= cMixSelect + cMixUpdate)
+
+               if ((type == 0 && cMixSelect == 0) ||
+                   (type == 1 && cMixUpdate == 0) ||
+                   (type == 2 && cMixInsert == 0) ||
+                   (type == 3 && cMixDelete == 0))
                {
-                  type = 1;
-                  if (colNames.size() <= 1)
-                     type = 0;
-               }
-               else if (m <= cMixSelect + cMixUpdate + cMixInsert)
-               {
-                  type = 2;
-               }
-               else
-               {
-                  type = 3;
+                  type = -1;
                }
 
                switch (type)
@@ -708,6 +729,11 @@ public class SQLLoadGenerator
                      result = generateDELETE(i, table, colNames, colTypes);
                      totalDelete++;
                      delete++;
+                     break;
+                  }
+                  default:
+                  {
+                     result = null;
                      break;
                   }
                }
