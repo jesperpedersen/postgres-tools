@@ -1864,25 +1864,36 @@ public class Replay
       DataEntry(String p, String s, String t, String pa)
       {
          this();
-         prepared = "P".equals(p);
-         statement = s;
-         if (t != null && !"".equals(t))
+         try
          {
-            types = new ArrayList<>();
-            String[] ss = t.split("\\|");
-            for (int i = 0; i < ss.length; i++)
+            prepared = "P".equals(p);
+            statement = s;
+            if (t != null && !"".equals(t))
             {
-               types.add(Integer.valueOf(ss[i]));
+               types = new ArrayList<>();
+               String[] ss = t.split("\\|");
+               for (int i = 0; i < ss.length; i++)
+               {
+                  types.add(Integer.valueOf(ss[i]));
+               }
+            }
+            if (pa != null && !"".equals(pa))
+            {
+               parameters = new ArrayList<>();
+               String[] ss = pa.split("\\|");
+               for (int i = 0; i < ss.length; i++)
+               {
+                  parameters.add(ss[i]);
+               }
             }
          }
-         if (pa != null && !"".equals(pa))
+         catch (Exception e)
          {
-            parameters = new ArrayList<>();
-            String[] ss = pa.split("\\|");
-            for (int i = 0; i < ss.length; i++)
-            {
-               parameters.add(ss[i]);
-            }
+            System.out.println("P: " + p);
+            System.out.println("S: " + s);
+            System.out.println("T: " + t);
+            System.out.println("PA: " + pa);
+            throw e;
          }
       }
 
