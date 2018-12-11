@@ -34,12 +34,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.Set;
 
 /**
  * Generate a SQL workload for Replay
@@ -96,31 +97,31 @@ public class SQLLoadGenerator
    private static Random random = new Random();
 
    /** Column names   Table   Names */
-   private static Map<String, List<String>> columnNames = new TreeMap<>();
+   private static Map<String, List<String>> columnNames = new HashMap<>();
    
    /** Column types   Table   Types */
-   private static Map<String, List<String>> columnTypes = new TreeMap<>();
+   private static Map<String, List<String>> columnTypes = new HashMap<>();
    
    /** Primary keys   Table   Column */
-   private static Map<String, String> primaryKeys = new TreeMap<>();
+   private static Map<String, String> primaryKeys = new HashMap<>();
 
    /** Active PKs     Table       Client           PKs */
-   private static Map<String, Map<Integer, TreeSet<String>>> activePKs = new TreeMap<>();
+   private static Map<String, Map<Integer, List<String>>> activePKs = new HashMap<>();
 
    /** Foreign keys   Table           Column */
-   private static Map<String, TreeSet<String>> foreignKeys = new TreeMap<>();
+   private static Map<String, Set<String>> foreignKeys = new HashMap<>();
 
    /** FromTo         Table           Table */
-   private static Map<String, TreeSet<String>> fromTo = new TreeMap<>();
+   private static Map<String, Set<String>> fromTo = new HashMap<>();
 
    /** ToFrom         Table           Table */
-   private static Map<String, TreeSet<String>> toFrom = new TreeMap<>();
+   private static Map<String, Set<String>> toFrom = new HashMap<>();
 
    /** NOT NULL       Table           Column */
-   private static Map<String, TreeSet<String>> notNulls = new TreeMap<>();
+   private static Map<String, Set<String>> notNulls = new HashMap<>();
 
    /** UNIQUE         Table       Column          Value */
-   private static Map<String, Map<String, TreeSet<String>>> uniques = new TreeMap<>();
+   private static Map<String, Map<String, Set<String>>> uniques = new HashMap<>();
 
    /**
     * Write data to a file
@@ -215,10 +216,10 @@ public class SQLLoadGenerator
 
                if (fkTable != null && fkColumn != null)
                {
-                  TreeSet<String> ts = foreignKeys.get(tableName);
+                  Set<String> ts = foreignKeys.get(tableName);
 
                   if (ts == null)
-                     ts = new TreeSet<>();
+                     ts = new HashSet<>();
 
                   ts.add(name + ":" + fkTable + ":" + fkColumn);
                   foreignKeys.put(tableName, ts);
@@ -226,7 +227,7 @@ public class SQLLoadGenerator
                   ts = fromTo.get(tableName);
 
                   if (ts == null)
-                     ts = new TreeSet<>();
+                     ts = new HashSet<>();
 
                   ts.add(fkTable);
                   fromTo.put(tableName, ts);
@@ -234,7 +235,7 @@ public class SQLLoadGenerator
                   ts = toFrom.get(fkTable);
 
                   if (ts == null)
-                     ts = new TreeSet<>();
+                     ts = new HashSet<>();
 
                   ts.add(tableName);
                   toFrom.put(fkTable, ts);
@@ -266,10 +267,10 @@ public class SQLLoadGenerator
                {
                   if (Boolean.parseBoolean(notnull))
                   {
-                     TreeSet<String> ts = notNulls.get(tableName);
+                     Set<String> ts = notNulls.get(tableName);
 
                      if (ts == null)
-                        ts = new TreeSet<>();
+                        ts = new HashSet<>();
 
                      ts.add(name);
                      notNulls.put(tableName, ts);
@@ -280,15 +281,15 @@ public class SQLLoadGenerator
                {
                   if (Boolean.parseBoolean(unique))
                   {
-                     Map<String, TreeSet<String>> m = uniques.get(tableName);
+                     Map<String, Set<String>> m = uniques.get(tableName);
 
                      if (m == null)
-                        m = new TreeMap<>();
+                        m = new HashMap<>();
 
-                     TreeSet<String> ts = m.get(name);
+                     Set<String> ts = m.get(name);
 
                      if (ts == null)
-                        ts = new TreeSet<>();
+                        ts = new HashSet<>();
 
                      m.put(name, ts);
                      uniques.put(tableName, m);
@@ -474,11 +475,11 @@ public class SQLLoadGenerator
     */
    private static List<String> getINSERT(String tableName) throws Exception
    {
-      List<String> l = new ArrayList<>();
-
+      int rows = getRows(tableName);
       List<String> colNames = columnNames.get(tableName);
       List<String> colTypes = columnTypes.get(tableName);
-      int rows = getRows(tableName);
+
+      List<String> l = new ArrayList<>(rows);
 
       for (int row = 1; row <= rows; row++)
       {
@@ -532,15 +533,15 @@ public class SQLLoadGenerator
                sb.append(val);
                if (i == 0)
                {
-                  Map<Integer, TreeSet<String>> m = activePKs.get(tableName);
+                  Map<Integer, List<String>> m = activePKs.get(tableName);
 
                   if (m == null)
-                     m = new TreeMap<>();
+                     m = new HashMap<>();
 
-                  TreeSet<String> gen = m.get(Integer.valueOf(0));
+                  List<String> gen = m.get(Integer.valueOf(0));
 
                   if (gen == null)
-                     gen = new TreeSet<>();
+                     gen = new ArrayList<>(getRows(tableName));
 
                   gen.add(val);
                   m.put(Integer.valueOf(0), gen);
@@ -602,7 +603,7 @@ public class SQLLoadGenerator
       int txR = 0;
       int[] distTx = new int[mspt];
 
-      List<String> tableNames = new ArrayList<>();
+      List<String> tableNames = new ArrayList<>(columnNames.size());
       for (String tableName : columnNames.keySet())
       {
          tableNames.add(tableName);
@@ -796,7 +797,7 @@ public class SQLLoadGenerator
       List<String> result = new ArrayList<>(3);
       String pk = primaryKeys.get(table);
       int index = 0;
-      TreeSet<String> fks = foreignKeys.get(table);
+      Set<String> fks = foreignKeys.get(table);
 
       if (pk != null)
          index = colNames.indexOf(pk);
@@ -1326,40 +1327,45 @@ public class SQLLoadGenerator
    private static String generatePrimaryKey(int client, String table, String name, String type, int row, boolean r) throws Exception
    {
       String newpk = getData(table, name, type, row, r);
-      Map<Integer, TreeSet<String>> m = activePKs.get(table);
+      Map<Integer, List<String>> m = activePKs.get(table);
 
       if (m == null)
-         m = new TreeMap<>();
-
-      TreeSet<String> gen = m.get(Integer.valueOf(0));
-      TreeSet<String> apks = m.get(Integer.valueOf(client));
-
-      if (gen == null)
-         gen = new TreeSet<>();
-
-      if (apks == null)
-         apks = new TreeSet<>();
+         m = new HashMap<>();
 
       if (client == 0)
       {
-         while (gen.contains(newpk))
+         List<String> gen = m.get(Integer.valueOf(0));
+
+         if (gen == null)
+            gen = new ArrayList<>(getRows(table));
+
+         if (isDataRandom(type))
          {
-            newpk = getData(table, name, type, row, r);
+            while (gen.contains(newpk))
+            {
+               newpk = getData(table, name, type, row, r);
+            }
          }
+
          gen.add(newpk);
+         m.put(Integer.valueOf(0), gen);
       }
       else
       {
+         List<String> gen = m.get(Integer.valueOf(0));
+         List<String> apks = m.get(Integer.valueOf(client));
+
+         if (apks == null)
+            apks = new ArrayList<>(getRows(table));
+
          while (gen.contains(newpk) || apks.contains(newpk))
          {
             newpk = getData(table, name, type, row, r);
          }
          apks.add(newpk);
+         m.put(Integer.valueOf(client), apks);
       }
 
-      m.put(Integer.valueOf(0), gen);
-      if (client != 0)
-         m.put(Integer.valueOf(client), apks);
       activePKs.put(table, m);
 
       return newpk;
@@ -1375,14 +1381,13 @@ public class SQLLoadGenerator
     */
    private static String getPrimaryKey(int client, String table) throws Exception
    {
-      Map<Integer, TreeSet<String>> m = activePKs.get(table);
-      TreeSet<String> apks = m.get(Integer.valueOf(client));
+      Map<Integer, List<String>> m = activePKs.get(table);
+      List<String> apks = m.get(Integer.valueOf(client));
 
       if (apks == null || apks.size() == 0)
          apks = m.get(Integer.valueOf(0));
 
-      String[] vals = apks.toArray(new String[apks.size()]);
-      return vals[random.nextInt(vals.length)];
+      return apks.get(random.nextInt(apks.size()));
    }
 
    /**
@@ -1394,8 +1399,8 @@ public class SQLLoadGenerator
     */
    private static boolean deletePrimaryKey(int client, String table, String pk) throws Exception
    {
-      Map<Integer, TreeSet<String>> m = activePKs.get(table);
-      TreeSet<String> apks = m.get(Integer.valueOf(client));
+      Map<Integer, List<String>> m = activePKs.get(table);
+      List<String> apks = m.get(Integer.valueOf(client));
 
       if (apks == null || apks.size() == 0)
          return false;
@@ -1414,7 +1419,7 @@ public class SQLLoadGenerator
     */
    private static boolean isForeignKey(String table, String col)
    {
-      TreeSet<String> ts = foreignKeys.get(table);
+      Set<String> ts = foreignKeys.get(table);
 
       if (ts == null)
          return false;
@@ -1437,7 +1442,7 @@ public class SQLLoadGenerator
     */
    private static String generateForeignKey(int client, String table, String col)
    {
-      TreeSet<String> ts = foreignKeys.get(table);
+      Set<String> ts = foreignKeys.get(table);
 
       for (String data : ts)
       {
@@ -1450,14 +1455,13 @@ public class SQLLoadGenerator
             String fkTable = data.substring(index1 + 1, index2);
             String fkCol = data.substring(index2 + 1);
 
-            Map<Integer, TreeSet<String>> m = activePKs.get(fkTable);
-            TreeSet<String> apks = m.get(Integer.valueOf(client));
+            Map<Integer, List<String>> m = activePKs.get(fkTable);
+            List<String> apks = m.get(Integer.valueOf(client));
 
             if (apks == null || apks.size() == 0)
                apks = m.get(Integer.valueOf(0));
 
-            String[] vals = apks.toArray(new String[apks.size()]);
-            return vals[random.nextInt(vals.length)];
+            return apks.get(random.nextInt(apks.size()));
          }
       }
 
@@ -1475,7 +1479,7 @@ public class SQLLoadGenerator
       if (isPrimaryKey(table, col) || isForeignKey(table, col))
          return false;
 
-      TreeSet<String> ts = notNulls.get(table);
+      Set<String> ts = notNulls.get(table);
 
       if (ts == null)
          return true;
@@ -1507,7 +1511,7 @@ public class SQLLoadGenerator
     */
    private static boolean isUnique(String table, String col)
    {
-      Map<String, TreeSet<String>> m = uniques.get(table);
+      Map<String, Set<String>> m = uniques.get(table);
 
       if (m == null)
          return false;
@@ -1524,15 +1528,15 @@ public class SQLLoadGenerator
    private static String generateUnique(String table, String name, String type) throws Exception
    {
       String val = getData(table, name, type, Integer.MAX_VALUE, true);
-      Map<String, TreeSet<String>> m = uniques.get(table);
+      Map<String, Set<String>> m = uniques.get(table);
 
       if (m == null)
-         m = new TreeMap<>();
+         m = new HashMap<>();
 
-      TreeSet<String> values = m.get(name);
+      Set<String> values = m.get(name);
 
       if (values == null)
-         values = new TreeSet<>();
+         values = new HashSet<>();
 
       while (values.contains(val))
       {
@@ -1705,6 +1709,35 @@ public class SQLLoadGenerator
             return java.util.UUID.randomUUID().toString();
       }
       throw new Exception("Unsupported type: " + type);
+   }
+
+   /**
+    * Is data random
+    * @param type The type
+    */
+   private static boolean isDataRandom(String type)
+   {
+      String base = type;
+      if (base.indexOf("(") != -1)
+      {
+         base = base.substring(0, base.indexOf("("));
+      }
+      switch (base.toLowerCase().trim())
+      {
+         case "bigint":
+         case "int8":
+         case "double precision":
+         case "float8":
+         case "integer":
+         case "int":
+         case "int4":
+         case "numeric":
+         case "decimal":
+         case "real":
+         case "float4":
+            return false;
+      }
+      return true;
    }
    
    /**
