@@ -770,27 +770,126 @@ public class SQLLoadGenerator
       List<String> result = new ArrayList<>(3);
       String pk = primaryKeys.get(table);
       int index = 0;
+      TreeSet<String> fks = foreignKeys.get(table);
 
       if (pk != null)
          index = colNames.indexOf(pk);
 
       StringBuilder sql = new StringBuilder();
-      sql.append("SELECT ");
-      for (int col = 0; col < colNames.size(); col++)
+      if (fks == null || fks.isEmpty())
       {
-         sql.append(colNames.get(col));
-         if (col < colNames.size() - 1)
-            sql.append(", ");
+         sql.append("SELECT ");
+         for (int col = 0; col < colNames.size(); col++)
+         {
+            sql.append(colNames.get(col));
+            if (col < colNames.size() - 1)
+               sql.append(", ");
+         }
+         sql.append(" FROM ");
+         sql.append(table);
+         sql.append(" WHERE ");
+         sql.append(colNames.get(index));
+         sql.append(" = ?");
       }
-      sql.append(" FROM ");
-      sql.append(table);
-      sql.append(" WHERE ");
-      sql.append(colNames.get(index));
-      sql.append(" = ?");
+      else
+      {
+         List<String> tcs = new ArrayList<>();
+         List<String> fkTables = new ArrayList<>();
+         List<String> fkCols = new ArrayList<>();
+
+         for (String fk : fks)
+         {
+            int index1 = fk.indexOf(":");
+            int index2 = fk.lastIndexOf(":");
+            tcs.add(fk.substring(0, index1));
+            fkTables.add(fk.substring(index1 + 1, index2));
+            fkCols.add(fk.substring(index2 + 1));
+         }
+
+         sql.append("SELECT ");
+         for (int col = 0; col < colNames.size(); col++)
+         {
+            sql.append(table);
+            sql.append("_.");
+            sql.append(colNames.get(col));
+            sql.append(" AS ");
+            sql.append(table);
+            sql.append("_");
+            sql.append(colNames.get(col));
+            sql.append(", ");
+         }
+
+         for (int i = 0; i < tcs.size(); i++)
+         {
+            String fkt = fkTables.get(i);
+            List<String> fkNames = columnNames.get(fkt);
+            for (int col = 0; col < fkNames.size(); col++)
+            {
+               sql.append(tcs.get(i));
+               sql.append("_");
+               sql.append(fkt);
+               sql.append("_.");
+               sql.append(fkNames.get(col));
+               sql.append(" AS ");
+               sql.append(tcs.get(i));
+               sql.append("_");
+               sql.append(fkt);
+               sql.append("_");
+               sql.append(fkNames.get(col));
+               if (col < fkNames.size() - 1 || i < tcs.size() - 1)
+                  sql.append(", ");
+            }
+         }
+
+         sql.append(" FROM ");
+         sql.append(table);
+         sql.append(" ");
+         sql.append(table);
+         sql.append("_ ");
+
+         for (int i = 0; i < tcs.size(); i++)
+         {
+            String tc = tcs.get(i);
+            String fkt = fkTables.get(i);
+            String fkc = fkCols.get(i);
+            sql.append("LEFT OUTER JOIN ");
+            sql.append(fkt);
+            sql.append(" ");
+            sql.append(tc);
+            sql.append("_");
+            sql.append(fkt);
+            sql.append("_ ON ");
+            sql.append(table);
+            sql.append("_.");
+            sql.append(tc);
+            sql.append(" = ");
+            sql.append(tc);
+            sql.append("_");
+            sql.append(fkt);
+            sql.append("_.");
+            sql.append(fkc);
+
+            if (i < tcs.size() - 1)
+               sql.append(" ");
+         }
+
+         sql.append(" WHERE ");
+         sql.append(table);
+         sql.append("_.");
+         sql.append(colNames.get(index));
+         sql.append(" = ?");
+      }
                
       result.add(sql.toString());
       result.add(getJavaType(colTypes.get(index)));
-      result.add(getData(table, colNames.get(index), colTypes.get(index), random.nextInt(getRows(table))));
+      if (pk != null)
+      {
+         result.add(getPrimaryKey(client, table));
+      }
+      else
+      {
+         result.add(getData(table, colNames.get(index), colTypes.get(index), random.nextInt(getRows(table))));
+      }
 
       return result;
    }
@@ -805,27 +904,49 @@ public class SQLLoadGenerator
       String pk = primaryKeys.get(table);
       int index = 0;
       int rows = getRows(table);
-      int updated = 0;
+      boolean[] updated = new boolean[colNames.size()];
+      boolean proceed = false;
 
       if (pk != null)
          index = colNames.indexOf(pk);
 
       StringBuilder sql = new StringBuilder();
+      StringBuilder types = new StringBuilder();
+      StringBuilder values = new StringBuilder();
+
       sql.append("UPDATE ");
       sql.append(table);
       sql.append(" SET ");
       for (int col = 0; col < colNames.size(); col++)
       {
+         updated[col] = false;
          if (pk == null && col != 0)
          {
             if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
             {
+               if (col > 0)
+               {
+                  for (int test = 0; test < col; test++)
+                  {
+                     if (updated[test])
+                     {
+                        sql.append(", ");
+                        types.append("|");
+                        values.append("|");
+                        break;
+                     }
+                  }
+               }
+
                sql.append(colNames.get(col));
                sql.append(" = ?");
-               updated++;
 
-               if (col < colNames.size() - 1)
-                  sql.append(", ");
+               types.append(getJavaType(colTypes.get(col)));
+
+               values.append(getData(table, colNames.get(col), colTypes.get(col), random.nextInt(rows)));
+
+               updated[col] = true;
+               proceed = true;
             }
          }
          else
@@ -834,12 +955,29 @@ public class SQLLoadGenerator
             {
                if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
                {
+                  if (col > 0)
+                  {
+                     for (int test = 0; test < col; test++)
+                     {
+                        if (updated[test])
+                        {
+                           sql.append(", ");
+                           types.append("|");
+                           values.append("|");
+                           break;
+                        }
+                     }
+                  }
+
                   sql.append(colNames.get(col));
                   sql.append(" = ?");
-                  updated++;
 
-                  if (col < colNames.size() - 1)
-                     sql.append(", ");
+                  types.append(getJavaType(colTypes.get(col)));
+
+                  values.append(getData(table, colNames.get(col), colTypes.get(col), random.nextInt(rows)));
+
+                  updated[col] = true;
+                  proceed = true;
                }
             }
          }
@@ -850,66 +988,13 @@ public class SQLLoadGenerator
                
       result.add(sql.toString());
 
-      if (updated == 0)
-         return null;
-
-      StringBuilder types = new StringBuilder();
-      for (int col = 0; col < colNames.size(); col++)
-      {
-         if (pk == null && col != 0)
-         {
-            if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
-            {
-               types.append(getJavaType(colTypes.get(col)));
-               if (col < colNames.size() - 1)
-                  types.append("|");
-            }
-         }
-         else
-         {
-            if (col != index)
-            {
-               if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
-               {
-                  types.append(getJavaType(colTypes.get(col)));
-                  if (col < colNames.size() - 1)
-                     types.append("|");
-               }
-            }
-         }
-      }
-      if (colNames.size() > 1)
+      if (types.length() > 0)
          types.append("|");
       types.append(getJavaType(colTypes.get(index)));
 
       result.add(types.toString());
 
-      StringBuilder values = new StringBuilder();
-      for (int col = 0; col < colNames.size(); col++)
-      {
-         if (pk == null && col != 0)
-         {
-            if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
-            {
-               values.append(getData(table, colNames.get(col), colTypes.get(col), random.nextInt(rows)));
-               if (col < colNames.size() - 1)
-                  values.append("|");
-            }
-         }
-         else
-         {
-            if (col != index)
-            {
-               if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
-               {
-                  values.append(getData(table, colNames.get(col), colTypes.get(col), random.nextInt(rows)));
-                  if (col < colNames.size() - 1)
-                     values.append("|");
-               }
-            }
-         }
-      }
-      if (colNames.size() > 1)
+      if (values.length() > 0)
          values.append("|");
       if (pk != null)
       {
@@ -921,6 +1006,9 @@ public class SQLLoadGenerator
       }
       
       result.add(values.toString());
+
+      if (!proceed)
+         return null;
 
       return result;
    }
