@@ -854,14 +854,22 @@ public class Replay
          }
          else
          {
-            es = Executors.newFixedThreadPool(Integer.valueOf(mc));
+            int maxConnections = Integer.valueOf(mc);
+            es = Executors.newFixedThreadPool(maxConnections);
 
             for (Client cli : clients)
             {
                es.submit(cli);
             }
 
-            Thread.sleep(2000L);
+            if (clients.size() <= maxConnections)
+            {
+               clientReady.await();
+            }
+            else
+            {
+               Thread.sleep(2000L);
+            }
 
             if (wait)
             {
