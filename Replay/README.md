@@ -78,7 +78,17 @@ Default is ```5432```
 
 The name of the database.
 
-*Required option*.
+*Required option*, if `url` isn't used.
+
+#### url
+
+Specifies the URL that should be used for the connection.
+
+F.ex.
+
+```
+url=jdbc:pgsql://localhost:5432/test
+```
 
 #### user
 
