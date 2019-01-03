@@ -87,14 +87,17 @@ public class SQLLoadGenerator
    /** Default NOT NULL */
    private static final int DEFAULT_NOT_NULL = 100;
 
+   /** Default number of partitions */
+   private static final int DEFAULT_PARTITIONS = 0;
+
    /** Profile */
    private static Properties profile;
 
    /** Row scale */
-   private static double rowScale = 1.0;
+   private static double rowScale = DEFAULT_SCALE;
 
    /** Statement scale */
-   private static double statementScale = 1.0;
+   private static double statementScale = DEFAULT_SCALE;
 
    /** Random */
    private static Random random = new Random();
@@ -156,6 +159,9 @@ public class SQLLoadGenerator
       List<String> l = new ArrayList<>();
       Enumeration<?> e = profile.propertyNames();
       List<String> alter = new ArrayList<>();
+
+      int partitions = profile.getProperty("partitions") != null ?
+         Integer.parseInt(profile.getProperty("partitions")) : DEFAULT_PARTITIONS;
 
       // Tables
       while (e.hasMoreElements())
@@ -321,6 +327,9 @@ public class SQLLoadGenerator
 
             if (colNames.size() > 0)
             {
+               int tPartitions = profile.getProperty(tableName + ".partitions") != null ?
+                  Integer.parseInt(profile.getProperty(tableName + ".partitions")) : partitions;
+
                columnNames.put(tableName, colNames);
                columnTypes.put(tableName, colTypes);
             
@@ -344,9 +353,45 @@ public class SQLLoadGenerator
                   if (i < colNames.size() - 1)
                      sb.append(", ");
                }
-               sb.append(");");
-            
+               sb.append(")");
+
+               if (tPartitions > 0)
+               {
+                  sb.append(" PARTITION BY HASH (");
+                  if (primaryKey != null)
+                  {
+                     sb.append(primaryKey);
+                  }
+                  else
+                  {
+                     sb.append(colNames.get(0));
+                  }
+                  sb.append(")");
+               }
+
+               sb.append(";");
+
                l.add(sb.toString());
+
+               if (tPartitions > 0)
+               {
+                  for (int t = 0; t < tPartitions; t++)
+                  {
+                     sb = new StringBuilder();
+                     sb.append("CREATE TABLE ");
+                     sb.append(tableName);
+                     sb.append("_p");
+                     sb.append(t);
+                     sb.append(" PARTITION OF ");
+                     sb.append(tableName);
+                     sb.append(" FOR VALUES WITH (MODULUS ");
+                     sb.append(tPartitions);
+                     sb.append(", REMAINDER ");
+                     sb.append(t);
+                     sb.append(");");
+                     l.add(sb.toString());
+                  }
+               }
 
                if (description != null && !"".equals(description.trim()))
                {
@@ -357,6 +402,24 @@ public class SQLLoadGenerator
                   sb.append(description.trim());
                   sb.append("\';");
                   l.add(sb.toString());
+                  if (tPartitions > 0)
+                  {
+                     for (int t = 0; t < tPartitions; t++)
+                     {
+                        sb = new StringBuilder();
+                        sb.append("COMMENT ON TABLE ");
+                        sb.append(tableName);
+                        sb.append("_p");
+                        sb.append(t);
+                        sb.append(" IS \'");
+                        sb.append(description.trim());
+                        sb.append(" (PARTITION ");
+                        sb.append(t);
+                        sb.append(")");
+                        sb.append("\';");
+                        l.add(sb.toString());
+                     }
+                  }
                }
 
                l.addAll(colDescriptions);

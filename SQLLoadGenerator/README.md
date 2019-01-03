@@ -144,6 +144,10 @@ The global mix for ```ROLLBACK``` transactions.  Default is ```0```.
 
 The global `NOT NULL` target. Default is ```100```.
 
+### partitions
+
+The global number of partitions that should be used for each table. Default is ```0```.
+
 ### table.X
 
 Define a table called X. Example
@@ -236,6 +240,14 @@ test.rows=1000000
 ### X.notnull
 
 The `NOT NULL` target for the table. Default is ```100```.
+
+### X.partitions
+
+The number of partitions that should be used for this table. Example
+
+```
+test.partitions=64
+```
 
 ### X.mix.select
 
