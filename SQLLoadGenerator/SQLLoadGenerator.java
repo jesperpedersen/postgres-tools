@@ -249,8 +249,13 @@ public class SQLLoadGenerator
                   ts.add(tableName);
                   toFrom.put(fkTable, ts);
 
+                  int tPartitions = profile.getProperty(tableName + ".partitions") != null ?
+                     Integer.parseInt(profile.getProperty(tableName + ".partitions")) : partitions;
+
                   StringBuilder sb = new StringBuilder();
-                  sb.append("ALTER TABLE ONLY ");
+                  sb.append("ALTER TABLE ");
+                  if (tPartitions == 0)
+                     sb.append("ONLY ");
                   sb.append(tableName);
                   sb.append(" ADD CONSTRAINT ");
                   sb.append("fk_");
