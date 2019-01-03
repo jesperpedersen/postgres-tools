@@ -1,6 +1,7 @@
 # SQLLoadGenerator
 
-This tool generates an OLTP workload to be used with Replay.
+This tool generates an Online Transaction Processing (OLTP) workload to be used
+with [Replay](https://github.com/jesperpedersen/postgres-tools/tree/master/Replay).
 
 ## Requirements
 
