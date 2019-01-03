@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2018 Jesper Pedersen <jesper.pedersen@comcast.net>
+ * Copyright (c) 2019 Jesper Pedersen <jesper.pedersen@comcast.net>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -90,8 +90,11 @@ public class SQLLoadGenerator
    /** Profile */
    private static Properties profile;
 
-   /** Scale */
-   private static double scale = 1.0;
+   /** Row scale */
+   private static double rowScale = 1.0;
+
+   /** Statement scale */
+   private static double statementScale = 1.0;
 
    /** Random */
    private static Random random = new Random();
@@ -634,6 +637,8 @@ public class SQLLoadGenerator
             Integer.parseInt(profile.getProperty("client." + i + ".commit")) : commit;
          int cRollback = profile.getProperty("client." + i + ".rollback") != null ?
             Integer.parseInt(profile.getProperty("client." + i + ".rollback")) : rollback;
+
+         cStatements = (int)(statementScale * cStatements);
 
          List<String> l = new ArrayList<>();
          int statement = 0;
@@ -1562,7 +1567,7 @@ public class SQLLoadGenerator
       int rows = profile.getProperty(table + ".rows") != null ?
          Integer.parseInt(profile.getProperty(table + ".rows")) : defaultRows;
 
-      return (int)(scale * rows);
+      return (int)(rowScale * rows);
    }
 
    /**
@@ -1816,16 +1821,16 @@ public class SQLLoadGenerator
    {
       try
       {
-         if (args.length == 1 || args.length > 4)
+         if (args.length == 1 || args.length > 6)
          {
-            System.out.println("Usage: SQLLoadGenerator [-s scale] [-c configuration.properties]");
+            System.out.println("Usage: SQLLoadGenerator [-s scale] [-t scale] [-c configuration.properties]");
             return;
          }
          
          String s = DEFAULT_PROFILE;
          if (args.length >= 1)
          {
-            if (!"-c".equals(args[0]) && !"-s".equals(args[0]))
+            if (!"-c".equals(args[0]) && !"-s".equals(args[0]) && !"-t".equals(args[0]))
                throw new Exception("Unknown option: " + args[0]);
          }
          if (args.length >= 2)
@@ -1834,7 +1839,11 @@ public class SQLLoadGenerator
             {
                if ("-s".equals(args[parameter]))
                {
-                  scale = Double.valueOf(args[++parameter]);
+                  rowScale = Double.valueOf(args[++parameter]);
+               }
+               else if ("-t".equals(args[parameter]))
+               {
+                  statementScale = Double.valueOf(args[++parameter]);
                }
                else if ("-c".equals(args[parameter]))
                {

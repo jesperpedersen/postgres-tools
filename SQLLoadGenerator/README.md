@@ -28,8 +28,9 @@ cd /path/to/work_area
 
 SQLLoadGenerator supports the following options
 
-* `-s`: Scale factor for number of rows
-* `-c`: Name of the profile that should be used
+* `-s`: Scale factor for number of rows (double)
+* `-t`: Scale factor for number of statements (double)
+* `-c`: Name of the profile that should be used (string)
 
 ## Configuration
 
