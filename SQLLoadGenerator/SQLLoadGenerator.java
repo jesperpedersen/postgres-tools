@@ -515,6 +515,8 @@ public class SQLLoadGenerator
    {
       List<String> l = new ArrayList<>();
 
+      l.add("BEGIN;");
+
       // No dependencies
       for (String tableName : columnNames.keySet())
       {
@@ -534,7 +536,10 @@ public class SQLLoadGenerator
             l.add("");
          }
       }
-      
+
+      l.add("COMMIT;");
+      l.add("");
+
       l.add("ANALYZE;");
       writeFile(Paths.get(profileName, "data.sql"), l);
    }
