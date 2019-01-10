@@ -32,6 +32,7 @@ import java.nio.file.StandardOpenOption;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -128,6 +129,9 @@ public class SQLLoadGenerator
 
    /** UNIQUE         Table       Column          Value */
    private static Map<String, Map<String, Set<String>>> uniques = new HashMap<>();
+
+   /** Workload statements */
+   private static Set<String> wStatements = new HashSet();
 
    /**
     * Write data to a file
@@ -847,6 +851,8 @@ public class SQLLoadGenerator
                   l.add(result.get(0));
                   l.add(result.get(1));
                   l.add(result.get(2));
+
+                  wStatements.add(result.get(0));
                }
             }
 
@@ -1894,6 +1900,57 @@ public class SQLLoadGenerator
    }
 
    /**
+    * Write the QueryAnalyzer file
+    * @param profileName The name of the profile
+    */
+   private static void writeQueryAnalyzer(String profileName) throws Exception
+   {
+      List<String> l = new ArrayList<>();
+      List<String> queries = new ArrayList<>();
+      int select = 1;
+      int update = 1;
+      int insert = 1;
+      int delete = 1;
+      int padding = (int)Math.log10(wStatements.size()) + 1;
+
+      l.add("# https://github.com/jesperpedersen/postgres-tools/tree/master/QueryAnalyzer");
+      l.add("host=localhost # ChangeMe");
+      l.add("port=5432 # ChangeMe");
+      l.add("database=test # ChangeMe");
+      l.add("user=test # ChangeMe");
+      l.add("password=test # ChangeMe");
+
+      for (String statement : wStatements)
+      {
+         if (statement.startsWith("SELECT"))
+         {
+            queries.add("query.select." + String.format("%0" + padding + "d", select) + "=" + statement);
+            select++;
+         }
+         else if (statement.startsWith("UPDATE"))
+         {
+            queries.add("query.update." + String.format("%0" + padding + "d", update) + "=" + statement);
+            update++;
+         }
+         else if (statement.startsWith("INSERT"))
+         {
+            queries.add("query.insert." + String.format("%0" + padding + "d", insert) + "=" + statement);
+            insert++;
+         }
+         else if (statement.startsWith("DELETE"))
+         {
+            queries.add("query.delete." + String.format("%0" + padding + "d", delete) + "=" + statement);
+            delete++;
+         }
+      }
+
+      Collections.sort(queries);
+      l.addAll(queries);
+
+      writeFile(Paths.get(profileName, profileName + "-queryanalyzer.properties"), l);
+   }
+
+   /**
     * Setup
     * @param name The name of the profile
     */
@@ -1960,6 +2017,7 @@ public class SQLLoadGenerator
          writeDDL(s);
          writeData(s);
          writeWorkload(s);
+         writeQueryAnalyzer(s);
       }
       catch (Exception e)
       {

@@ -307,3 +307,6 @@ psql -U username -f sqlloadgenerator/data.sql test
 ```
 
 and then proceed with the [Replay](https://github.com/jesperpedersen/postgres-tools/tree/master/Replay) setup.
+
+A [QueryAnalyzer](https://github.com/jesperpedersen/postgres-tools/tree/master/QueryAnalyzer) file is generated
+as well under the name `sqlloadgenerator-queryanalyzer.properties`.
