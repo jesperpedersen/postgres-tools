@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2018 Jesper Pedersen <jesper.pedersen@comcast.net>
+ * Copyright (c) 2019 Jesper Pedersen <jesper.pedersen@comcast.net>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -132,11 +132,8 @@ public class QueryAnalyzer
    /** The configuration */
    private static Properties configuration;
 
-   /** Is PostgreSQL 10 or higher */
-   private static boolean is10 = false;
-
-   /** Is PostgreSQL 11 or higher */
-   private static boolean is11 = false;
+   /** The PostgreSQL version */
+   private static int version = 9;
 
    /** Plan count */
    private static int planCount;
@@ -1830,7 +1827,7 @@ public class QueryAnalyzer
          sb = sb.append(" ON ");
          sb = sb.append(tableName);
          sb = sb.append(" USING ");
-         if (btree || !is10)
+         if (btree || version < 10)
          {
             sb = sb.append("BTREE");
          }
@@ -2561,7 +2558,7 @@ public class QueryAnalyzer
                   result.add("<td>" + newIndex + "</td>");
 
                   btree = isBTreeIndex(tableName, newIndex);
-                  if (btree || !is10)
+                  if (btree || version < 10)
                   {
                      result.add("<td>btree</td>");
                   }
@@ -2598,7 +2595,7 @@ public class QueryAnalyzer
       }
 
       // Consider covering indexes for PostgreSQL 11+
-      if (is11)
+      if (version >= 11)
       {
          int numberOfColumns = columns.get(tableName).keySet().size();
          if (numberOfColumns > 0)
@@ -4405,26 +4402,25 @@ public class QueryAnalyzer
          if (ver.indexOf(".") != -1)
          {
             ver = ver.substring(0, ver.indexOf("."));
-            if (Integer.valueOf(ver) == 10)
-            {
-               is10 = true;
-            }
-            else if (Integer.valueOf(ver) >= 11)
-            {
-               is10 = true;
-               is11 = true;
-            }
+            version = Integer.valueOf(ver);
          }
          else
          {
             if (ver.startsWith("10"))
             {
-               is10 = true;
+               version = 10;
+            }
+            else if (ver.startsWith("11"))
+            {
+               version = 11;
             }
             else if (ver.startsWith("1"))
             {
-               is10 = true;
-               is11 = true;
+               version = 12;
+            }
+            else
+            {
+               version = 9;
             }
          }
       }
