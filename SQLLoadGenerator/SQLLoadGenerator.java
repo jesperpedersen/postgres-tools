@@ -177,7 +177,9 @@ public class SQLLoadGenerator
             List<String> colNames = new ArrayList<>();
             List<String> colTypes = new ArrayList<>();
             List<String> colDescriptions = new ArrayList<>();
-            
+            int tPartitions = profile.getProperty(tableName + ".partitions") != null ?
+               Integer.parseInt(profile.getProperty(tableName + ".partitions")) : partitions;
+
             while (profile.getProperty(tableName + ".column." + counter) != null)
             {
                String name = profile.getProperty(tableName + ".column." + counter);
@@ -249,9 +251,6 @@ public class SQLLoadGenerator
                   ts.add(tableName);
                   toFrom.put(fkTable, ts);
 
-                  int tPartitions = profile.getProperty(tableName + ".partitions") != null ?
-                     Integer.parseInt(profile.getProperty(tableName + ".partitions")) : partitions;
-
                   StringBuilder sb = new StringBuilder();
                   sb.append("ALTER TABLE ");
                   if (tPartitions == 0)
@@ -309,14 +308,42 @@ public class SQLLoadGenerator
                      uniques.put(tableName, m);
 
                      StringBuilder sb = new StringBuilder();
-                     sb.append("ALTER TABLE ONLY ");
+                     sb.append("ALTER TABLE ");
+                     if (tPartitions == 0)
+                        sb.append("ONLY ");
                      sb.append(tableName);
                      sb.append(" ADD CONSTRAINT ");
                      sb.append("uniq_");
                      sb.append(tableName);
                      sb.append("_");
+                     if (tPartitions > 0)
+                     {
+                        if (primaryKey != null)
+                        {
+                           sb.append(primaryKey);
+                           sb.append("_");
+                        }
+                        else
+                        {
+                           sb.append(colNames.get(0));
+                           sb.append("_");
+                        }
+                     }
                      sb.append(name);
                      sb.append(" UNIQUE (");
+                     if (tPartitions > 0)
+                     {
+                        if (primaryKey != null)
+                        {
+                           sb.append(primaryKey);
+                           sb.append(", ");
+                        }
+                        else
+                        {
+                           sb.append(colNames.get(0));
+                           sb.append(", ");
+                        }
+                     }
                      sb.append(name);
                      sb.append(");");
 
@@ -332,9 +359,6 @@ public class SQLLoadGenerator
 
             if (colNames.size() > 0)
             {
-               int tPartitions = profile.getProperty(tableName + ".partitions") != null ?
-                  Integer.parseInt(profile.getProperty(tableName + ".partitions")) : partitions;
-
                columnNames.put(tableName, colNames);
                columnTypes.put(tableName, colTypes);
             
