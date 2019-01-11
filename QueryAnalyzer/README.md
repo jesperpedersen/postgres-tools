@@ -18,8 +18,8 @@ This tool generates HTML reports about queries run against PostgreSQL.
 
 ```bash
 cd /path/to/work_area
-wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlparser/1.3/jsqlparser-1.3.jar
-/path/to/javac -classpath jsqlparser-1.3.jar QueryAnalyzer.java
+wget https://oss.sonatype.org/content/groups/public/com/github/jsqlparser/jsqlparser/1.4/jsqlparser-1.4.jar
+/path/to/javac -classpath jsqlparser-1.4.jar QueryAnalyzer.java
 ```
 
 ### Download the PostgreSQL JDBC driver
@@ -32,7 +32,7 @@ Download from the [PostgreSQL JDBC](https://jdbc.postgresql.org/download.html) w
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:postgresql-42.2.5.jar:jsqlparser-1.3.jar QueryAnalyzer
+/path/to/java -classpath .:postgresql-42.2.5.jar:jsqlparser-1.4.jar QueryAnalyzer
 ```
 
 ## Configuration
@@ -44,7 +44,7 @@ Alternative, Queryanalyzer can be configured through another properties file and
 
 ```bash
 cd /path/to/work_area
-/path/to/java -classpath .:postgresql-42.2.5.jar:jsqlparser-1.3.jar QueryAnalyzer -c myprops.properties
+/path/to/java -classpath .:postgresql-42.2.5.jar:jsqlparser-1.4.jar QueryAnalyzer -c myprops.properties
 ```
 
 ### host
