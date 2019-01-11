@@ -1992,6 +1992,9 @@ public class QueryAnalyzer
 
                      if (imports.containsKey(table.toLowerCase()))
                         eavb = false;
+
+                     if (statement instanceof Insert && primaryKeys.containsKey(table.toLowerCase()))
+                        eavb = false;
                   }
                }
 
