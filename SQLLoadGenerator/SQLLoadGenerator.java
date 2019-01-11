@@ -741,6 +741,9 @@ public class SQLLoadGenerator
 
          cStatements = (int)(statementScale * cStatements);
 
+         if (cStatements == 0)
+            continue;
+
          List<String> l = new ArrayList<>();
          int statement = 0;
          while (statement <= cStatements)
