@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -1600,7 +1601,15 @@ public class Replay
                                     }
                                     else
                                     {
-                                       ps.setObject(i + 1, value);
+                                       try
+                                       {
+                                          UUID uuid = UUID.fromString(value);
+                                          ps.setObject(i + 1, uuid);
+                                       }
+                                       catch (Exception e)
+                                       {
+                                          ps.setObject(i + 1, value);
+                                       }
                                     }
 
                                     break;
