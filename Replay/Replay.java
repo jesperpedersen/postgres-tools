@@ -1573,6 +1573,37 @@ public class Replay
                                  case Types.VARCHAR:
                                     ps.setString(i + 1, value);
                                     break;
+                                 case Types.OTHER:
+                                    boolean isNumber = true;
+
+                                    for (int ch = 0; isNumber && ch < value.length(); ch++)
+                                    {
+                                       if (!Character.isDigit(value.charAt(ch)))
+                                          isNumber = false;
+                                    }
+
+                                    if (isNumber)
+                                    {
+                                       Long number = Long.parseLong(value);
+                                       if (number.longValue() < Short.MAX_VALUE)
+                                       {
+                                          ps.setShort(i + 1, number.shortValue());
+                                       }
+                                       else if (number.longValue() < Integer.MAX_VALUE)
+                                       {
+                                          ps.setInt(i + 1, number.intValue());
+                                       }
+                                       else
+                                       {
+                                          ps.setLong(i + 1, number.longValue());
+                                       }
+                                    }
+                                    else
+                                    {
+                                       ps.setObject(i + 1, value);
+                                    }
+
+                                    break;
                                  default:
                                     System.out.println("Unsupported value: " + type);
                                     break;
