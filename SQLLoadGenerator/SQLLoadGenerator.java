@@ -133,6 +133,9 @@ public class SQLLoadGenerator
    /** Workload statements */
    private static Set<String> wStatements = new HashSet();
 
+   /** SERIAL         Table   Counter */
+   private static Map<String, Long> serials = new HashMap<>();
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -355,6 +358,22 @@ public class SQLLoadGenerator
                   }
                }
 
+               if (isSerial(type))
+               {
+                  if (counter == 1 && primaryKey == null)
+                  {
+                     // Ok
+                  }
+                  else if (primaryKey != null && (!colNames.contains(primaryKey) || counter - 1 == colNames.indexOf(primaryKey)))
+                  {
+                     // Ok
+                  }
+                  else
+                  {
+                     throw new Exception("SERIAL only valid for primary key column or column 1 on table " + tableName);
+                  }
+               }
+
                colNames.add(name);
                colTypes.add(type);
 
@@ -475,6 +494,8 @@ public class SQLLoadGenerator
                   sb.append(");");
 
                   l.add(sb.toString());
+
+                  primaryKeys.put(tableName, colNames.get(0));
                }
             }
             else
@@ -593,69 +614,81 @@ public class SQLLoadGenerator
          sb.append(" (");
          for (int i = 0; i < colNames.size(); i++)
          {
-            sb.append(colNames.get(i));
-            if (i < colNames.size() - 1)
-               sb.append(", ");
+            if (!isSerial(colTypes.get(i)))
+            {
+               sb.append(colNames.get(i));
+               if (i < colNames.size() - 1)
+                  sb.append(", ");
+            }
          }
          sb.append(") VALUES (");
          for (int i = 0; i < colTypes.size(); i++)
          {
-            String val;
-            if (isPrimaryKey(tableName, colNames.get(i)))
+            String colType = colTypes.get(i);
+            if (!isSerial(colType))
             {
-               val = generatePrimaryKey(0, tableName, colNames.get(i), colTypes.get(i), row, false);
-            }
-            else if (isForeignKey(tableName, colNames.get(i)))
-            {
-               val = generateForeignKey(0, tableName, colNames.get(i));
-            }
-            else if (isUnique(tableName, colNames.get(i)))
-            {
-               val = generateUnique(tableName, colNames.get(i), colTypes.get(i));
-            }
-            else
-            {
-               val = getData(tableName, colNames.get(i), colTypes.get(i), row, i == 0 ? false : true);
-            }
-
-            if (!"NULL".equals(val) && mustEscape(colTypes.get(i)))
-               sb.append("\'");
-            if (isPrimaryKey(tableName, colNames.get(i)))
-            {
-               sb.append(val);
-            }
-            else if (isForeignKey(tableName, colNames.get(i)))
-            {
-               sb.append(val);
-            }
-            else if (isUnique(tableName, colNames.get(i)))
-            {
-               sb.append(val);
-            }
-            else
-            {
-               sb.append(val);
-               if (i == 0)
+               String val;
+               if (isPrimaryKey(tableName, colNames.get(i)))
                {
-                  Map<Integer, List<String>> m = activePKs.get(tableName);
-
-                  if (m == null)
-                     m = new HashMap<>();
-
-                  List<String> gen = m.get(Integer.valueOf(0));
-
-                  if (gen == null)
-                     gen = new ArrayList<>(getRows(tableName));
-
-                  gen.add(val);
-                  m.put(Integer.valueOf(0), gen);
-                  activePKs.put(tableName, m);
+                  val = generatePrimaryKey(0, tableName, colNames.get(i), colType, row, false);
                }
+               else if (isForeignKey(tableName, colNames.get(i)))
+               {
+                  val = generateForeignKey(0, tableName, colNames.get(i));
+               }
+               else if (isUnique(tableName, colNames.get(i)))
+               {
+                  val = generateUnique(tableName, colNames.get(i), colType);
+               }
+               else
+               {
+                  val = getData(tableName, colNames.get(i), colType, row, i == 0 ? false : true);
+               }
+
+               if (!"NULL".equals(val) && mustEscape(colType))
+                  sb.append("\'");
+               if (isPrimaryKey(tableName, colNames.get(i)))
+               {
+                  sb.append(val);
+               }
+               else if (isForeignKey(tableName, colNames.get(i)))
+               {
+                  sb.append(val);
+               }
+               else if (isUnique(tableName, colNames.get(i)))
+               {
+                  sb.append(val);
+               }
+               else
+               {
+                  sb.append(val);
+                  if (i == 0)
+                  {
+                     Map<Integer, List<String>> m = activePKs.get(tableName);
+
+                     if (m == null)
+                        m = new HashMap<>();
+
+                     List<String> gen = m.get(Integer.valueOf(0));
+
+                     if (gen == null)
+                        gen = new ArrayList<>(getRows(tableName));
+
+                     gen.add(val);
+                     m.put(Integer.valueOf(0), gen);
+                     activePKs.put(tableName, m);
+                  }
+               }
+               if (!"NULL".equals(val) && mustEscape(colType))
+                  sb.append("\'");
+               if (i < colTypes.size() - 1)
+                  sb.append(", ");
             }
-            if (!"NULL".equals(val) && mustEscape(colTypes.get(i)))
-               sb.append("\'");
-            if (i < colTypes.size() - 1)
-               sb.append(", ");
+            else
+            {
+               // In order to init the activePKs map
+               generatePrimaryKey(0, tableName, colNames.get(i), colType, row, false);
+            }
          }
          sb.append(");");
 
@@ -1170,37 +1203,47 @@ public class SQLLoadGenerator
       sql.append(" (");
       for (int i = 0; i < colNames.size(); i++)
       {
-         sql.append(colNames.get(i));
-         if (i < colNames.size() - 1)
-            sql.append(", ");
+         if (!isSerial(colTypes.get(i)))
+         {
+            sql.append(colNames.get(i));
+            if (i < colNames.size() - 1)
+               sql.append(", ");
+         }
       }
       sql.append(") VALUES (");
       for (int i = 0; i < colTypes.size(); i++)
       {
          String colType = colTypes.get(i);
-         sql.append("?");
-         types.append(getJavaType(colType));
-         if (isPrimaryKey(table, colNames.get(i)))
+         if (!isSerial(colType))
          {
-            values.append(generatePrimaryKey(client, table, colNames.get(i), colType));
-         }
-         else if (isForeignKey(table, colNames.get(i)))
-         {
-            values.append(generateForeignKey(client, table, colNames.get(i)));
-         }
-         else if (isUnique(table, colNames.get(i)))
-         {
-            values.append(generateUnique(table, colNames.get(i), colType));
+            sql.append("?");
+            types.append(getJavaType(colType));
+            if (isPrimaryKey(table, colNames.get(i)))
+            {
+               values.append(generatePrimaryKey(client, table, colNames.get(i), colType));
+            }
+            else if (isForeignKey(table, colNames.get(i)))
+            {
+               values.append(generateForeignKey(client, table, colNames.get(i)));
+            }
+            else if (isUnique(table, colNames.get(i)))
+            {
+               values.append(generateUnique(table, colNames.get(i), colType));
+            }
+            else
+            {
+               values.append(getData(table, colNames.get(i), colType, random.nextInt(rows)));
+            }
+            if (i < colTypes.size() - 1)
+            {
+               sql.append(", ");
+               types.append("|");
+               values.append("|");
+            }
          }
          else
          {
-            values.append(getData(table, colNames.get(i), colType, random.nextInt(rows)));
-         }
-         if (i < colTypes.size() - 1)
-         {
-            sql.append(", ");
-            types.append("|");
-            values.append("|");
+            generatePrimaryKey(client, table, colNames.get(i), colType);
          }
       }
       sql.append(")");
@@ -1325,8 +1368,9 @@ public class SQLLoadGenerator
          case "bigint":
          case "int8":
             return Integer.toString(Types.BIGINT);
-            //case "bigserial":
-            //case "serial8":
+         case "bigserial":
+         case "serial8":
+            return Integer.toString(Types.OTHER);
          case "bit":
          case "bit varying":
          case "varbit":
@@ -1361,10 +1405,12 @@ public class SQLLoadGenerator
          case "smallint":
          case "int2":
             return Integer.toString(Types.SMALLINT);
-            //case "smallserial":
-            //case "serial2":
-            //case "serial":
-            //case "serial4":
+         case "smallserial":
+         case "serial2":
+            return Integer.toString(Types.OTHER);
+         case "serial":
+         case "serial4":
+            return Integer.toString(Types.OTHER);
          case "text":
             return Integer.toString(Types.VARCHAR);
          case "time":
@@ -1457,6 +1503,17 @@ public class SQLLoadGenerator
                newpk = getData(table, name, type, row, r);
             }
          }
+         else if (isSerial(type))
+         {
+            Long l = serials.get(table);
+
+            if (l == null)
+               l = Long.valueOf(0);
+
+            l = Long.valueOf(l.longValue() + 1);
+            serials.put(table, l);
+            newpk = Long.toString(l);
+         }
 
          gen.add(newpk);
          m.put(Integer.valueOf(0), gen);
@@ -1469,15 +1526,32 @@ public class SQLLoadGenerator
          if (apks == null)
             apks = new ArrayList<>(getRows(table));
 
-         while (gen.contains(newpk) || apks.contains(newpk))
+         if (isSerial(type))
          {
-            newpk = getData(table, name, type, row, r);
+            Long l = serials.get(table);
+
+            if (l == null)
+               l = Long.valueOf(0);
+
+            l = Long.valueOf(l.longValue() + 1);
+            serials.put(table, l);
+            newpk = Long.toString(l);
+         }
+         else
+         {
+            while (gen.contains(newpk) || apks.contains(newpk))
+            {
+               newpk = getData(table, name, type, row, r);
+            }
          }
          apks.add(newpk);
          m.put(Integer.valueOf(client), apks);
       }
 
       activePKs.put(table, m);
+
+      if (isSerial(type))
+         return "DEFAULT";
 
       return newpk;
    }
@@ -1731,8 +1805,9 @@ public class SQLLoadGenerator
             {
                return Long.toString(row);
             }
-            //case "bigserial":
-            //case "serial8":
+         case "bigserial":
+         case "serial8":
+            return "DEFAULT";
          case "bit":
          case "bit varying":
          case "varbit":
@@ -1797,10 +1872,12 @@ public class SQLLoadGenerator
          case "smallint":
          case "int2":
             return Short.toString((short)random.nextInt(Short.MAX_VALUE));
-            //case "smallserial":
-            //case "serial2":
-            //case "serial":
-            //case "serial4":
+         case "smallserial":
+         case "serial2":
+            return "DEFAULT";
+         case "serial":
+         case "serial4":
+            return "DEFAULT";
          case "text":
             sb = new StringBuilder(256);
             for (int i = 0; i < 256; i++)
@@ -1835,6 +1912,8 @@ public class SQLLoadGenerator
       }
       switch (base.toLowerCase().trim())
       {
+         case "bigserial":
+         case "serial8":
          case "bigint":
          case "int8":
          case "double precision":
@@ -1846,6 +1925,10 @@ public class SQLLoadGenerator
          case "decimal":
          case "real":
          case "float4":
+         case "smallserial":
+         case "serial2":
+         case "serial":
+         case "serial4":
             return false;
       }
       return true;
@@ -1900,6 +1983,27 @@ public class SQLLoadGenerator
       }
 
       return true;
+   }
+
+   /**
+    * Is SERIAL
+    * @param type The type
+    * @return True if SERIAL, otherwise false
+    */
+   private static boolean isSerial(String type)
+   {
+      switch (type.toLowerCase().trim())
+      {
+         case "bigserial":
+         case "serial8":
+         case "smallserial":
+         case "serial2":
+         case "serial":
+         case "serial4":
+            return true;
+      }
+
+      return false;
    }
 
    /**
