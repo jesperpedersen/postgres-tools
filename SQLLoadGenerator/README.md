@@ -121,6 +121,10 @@ The maximum number of statements per transaction. Default is ```5```.
 
 The global mix for ```SELECT``` statements.  Default is ```70```.
 
+### mix.select.index
+
+The global mix for ```SELECT``` statements using the defined indexes.  Default is ```0```.
+
 ### mix.update
 
 The global mix for ```UPDATE``` statements.  Default is ```15```.
@@ -256,6 +260,14 @@ The mix of ```SELECT``` for a specific table. Example
 
 ```
 test.mix.select=40
+```
+
+### X.mix.select.index
+
+The mix of ```SELECT``` for a specific table using its defined indexes. Example
+
+```
+test.mix.select.index=20
 ```
 
 ### X.mix.update

@@ -39,9 +39,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.StringTokenizer;
 
 /**
  * Generate a SQL workload for Replay
@@ -91,6 +93,9 @@ public class SQLLoadGenerator
    /** Default number of partitions */
    private static final int DEFAULT_PARTITIONS = 0;
 
+   /** Default SELECT for index usage */
+   private static final int DEFAULT_MIX_SELECT_INDEX = 0;
+
    /** Profile */
    private static Properties profile;
 
@@ -115,19 +120,19 @@ public class SQLLoadGenerator
    /** Active PKs     Table       Client           PKs */
    private static Map<String, Map<Integer, List<String>>> activePKs = new HashMap<>();
 
-   /** Foreign keys   Table           Column */
+   /** Foreign keys   Table       Column */
    private static Map<String, Set<String>> foreignKeys = new HashMap<>();
 
-   /** FromTo         Table           Table */
+   /** FromTo         Table       Table */
    private static Map<String, Set<String>> fromTo = new HashMap<>();
 
-   /** ToFrom         Table           Table */
+   /** ToFrom         Table       Table */
    private static Map<String, Set<String>> toFrom = new HashMap<>();
 
-   /** NOT NULL       Table           Column */
+   /** NOT NULL       Table       Column */
    private static Map<String, Set<String>> notNulls = new HashMap<>();
 
-   /** UNIQUE         Table       Column          Value */
+   /** UNIQUE         Table       Column      Value */
    private static Map<String, Map<String, Set<String>>> uniques = new HashMap<>();
 
    /** Workload statements */
@@ -135,6 +140,9 @@ public class SQLLoadGenerator
 
    /** SERIAL         Table   Counter */
    private static Map<String, Long> serials = new HashMap<>();
+
+   /** Index          Table       Def           Client        Values */
+   private static Map<String, Map<IndexDef, Map<Integer, List<IndexVal>>>> indexes = new HashMap<>();
 
    /**
     * Write data to a file
@@ -550,6 +558,14 @@ public class SQLLoadGenerator
             sb.append(");");
             
             l.add(sb.toString());
+
+            List<String> columns = new ArrayList<>();
+            StringTokenizer st = new StringTokenizer(cols, ",");
+            while (st.hasMoreTokens())
+            {
+               columns.add(st.nextToken().toLowerCase().trim());
+            }
+            defineIndex(tableName, columns);
          }
       }
       
@@ -565,6 +581,7 @@ public class SQLLoadGenerator
       List<String> l = new ArrayList<>();
 
       l.add("BEGIN;");
+      l.add("");
 
       // No dependencies
       for (String tableName : columnNames.keySet())
@@ -608,6 +625,8 @@ public class SQLLoadGenerator
 
       for (int row = 1; row <= rows; row++)
       {
+         List<String> colValues = new ArrayList<>(colNames.size());
+
          StringBuilder sb = new StringBuilder();
          sb.append("INSERT INTO ");
          sb.append(tableName);
@@ -625,9 +644,9 @@ public class SQLLoadGenerator
          for (int i = 0; i < colTypes.size(); i++)
          {
             String colType = colTypes.get(i);
+            String val;
             if (!isSerial(colType))
             {
-               String val;
                if (isPrimaryKey(tableName, colNames.get(i)))
                {
                   val = generatePrimaryKey(0, tableName, colNames.get(i), colType, row, false);
@@ -687,12 +706,16 @@ public class SQLLoadGenerator
             else
             {
                // In order to init the activePKs map
-               generatePrimaryKey(0, tableName, colNames.get(i), colType, row, false);
+               val = generatePrimaryKey(0, tableName, colNames.get(i), colType, row, false);
             }
+
+            colValues.add(val);
          }
          sb.append(");");
 
          l.add(sb.toString());
+
+         insertIndex(0, tableName, colNames, colValues);
       }
 
       return l;
@@ -940,11 +963,10 @@ public class SQLLoadGenerator
    {
       List<String> result = new ArrayList<>(3);
       String pk = primaryKeys.get(table);
-      int index = 0;
+      int index = colNames.indexOf(pk);
       Set<String> fks = foreignKeys.get(table);
-
-      if (pk != null)
-         index = colNames.indexOf(pk);
+      IndexDef id = null;
+      IndexVal iv = null;
 
       StringBuilder sql = new StringBuilder();
       if (fks == null || fks.isEmpty())
@@ -959,8 +981,38 @@ public class SQLLoadGenerator
          sql.append(" FROM ");
          sql.append(table);
          sql.append(" WHERE ");
-         sql.append(colNames.get(index));
-         sql.append(" = ?");
+
+         int r = random.nextInt(101);
+         if (r < getSelectDistribution(table))
+         {
+            id = getRandomIndexDefinition(client, table);
+            iv = getRandomIndexValue(client, table, id);
+
+            if (id != null && iv != null)
+            {
+               for (int i = 0; i < id.getColumns().size(); i++)
+               {
+                  sql.append(id.getColumns().get(i));
+                  sql.append(" = ?");
+
+                  if (i < id.getColumns().size() - 1)
+                     sql.append(" AND ");
+               }
+            }
+            else
+            {
+               id = null;
+               iv = null;
+
+               sql.append(colNames.get(index));
+               sql.append(" = ?");
+            }
+         }
+         else
+         {
+            sql.append(colNames.get(index));
+            sql.append(" = ?");
+         }
       }
       else
       {
@@ -1052,14 +1104,31 @@ public class SQLLoadGenerator
       }
                
       result.add(sql.toString());
-      result.add(getJavaType(colTypes.get(index)));
-      if (pk != null)
+      if (id == null && iv == null)
       {
+         result.add(getJavaType(colTypes.get(index)));
          result.add(getPrimaryKey(client, table));
       }
       else
       {
-         result.add(getData(table, colNames.get(index), colTypes.get(index), random.nextInt(getRows(table))));
+         StringBuilder types = new StringBuilder();
+         StringBuilder values = new StringBuilder();
+         for (int i = 0; i < id.getColumns().size(); i++)
+         {
+            String colName = id.getColumns().get(i);
+            int colIndex = colNames.indexOf(colName);
+
+            types.append(getJavaType(colTypes.get(colIndex)));
+            values.append(iv.getValues().get(i));
+
+            if (i < id.getColumns().size() - 1)
+            {
+               types.append("|");
+               values.append("|");
+            }
+         }
+         result.add(types.toString());
+         result.add(values.toString());
       }
 
       return result;
@@ -1077,6 +1146,10 @@ public class SQLLoadGenerator
       int rows = getRows(table);
       boolean[] updated = new boolean[colNames.size()];
       boolean proceed = false;
+      List<String> cn = new ArrayList<>(colNames.size());
+      List<String> cv = new ArrayList<>(colNames.size());
+      String val;
+      String pkVal;
 
       if (pk != null)
          index = colNames.indexOf(pk);
@@ -1114,7 +1187,11 @@ public class SQLLoadGenerator
 
                types.append(getJavaType(colTypes.get(col)));
 
-               values.append(getData(table, colNames.get(col), colTypes.get(col), random.nextInt(rows)));
+               val = getData(table, colNames.get(col), colTypes.get(col), random.nextInt(rows));
+               values.append(val);
+
+               cn.add(colNames.get(col));
+               cv.add(val);
 
                updated[col] = true;
                proceed = true;
@@ -1145,7 +1222,11 @@ public class SQLLoadGenerator
 
                   types.append(getJavaType(colTypes.get(col)));
 
-                  values.append(getData(table, colNames.get(col), colTypes.get(col), random.nextInt(rows)));
+                  val = getData(table, colNames.get(col), colTypes.get(col), random.nextInt(rows));
+                  values.append(val);
+
+                  cn.add(colNames.get(col));
+                  cv.add(val);
 
                   updated[col] = true;
                   proceed = true;
@@ -1169,17 +1250,22 @@ public class SQLLoadGenerator
          values.append("|");
       if (pk != null)
       {
-         values.append(getPrimaryKey(client, table));
+         pkVal = getPrimaryKey(client, table);
       }
       else
       {
-         values.append(getData(table, colNames.get(index), colTypes.get(index), random.nextInt(rows)));
+         pkVal = getData(table, colNames.get(index), colTypes.get(index), random.nextInt(rows));
       }
+      values.append(pkVal);
+      cn.add(colNames.get(index));
+      cv.add(pkVal);
       
       result.add(values.toString());
 
       if (!proceed)
          return null;
+
+      updateIndex(client, table, pkVal, cn, cv);
 
       return result;
    }
@@ -1193,6 +1279,7 @@ public class SQLLoadGenerator
       List<String> result = new ArrayList<>(3);
       String pk = primaryKeys.get(table);
       int rows = getRows(table);
+      List<String> colValues = new ArrayList<>(colNames.size());
 
       StringBuilder sql = new StringBuilder();
       StringBuilder types = new StringBuilder();
@@ -1214,26 +1301,30 @@ public class SQLLoadGenerator
       for (int i = 0; i < colTypes.size(); i++)
       {
          String colType = colTypes.get(i);
+         String val;
          if (!isSerial(colType))
          {
             sql.append("?");
             types.append(getJavaType(colType));
             if (isPrimaryKey(table, colNames.get(i)))
             {
-               values.append(generatePrimaryKey(client, table, colNames.get(i), colType));
+               val = generatePrimaryKey(client, table, colNames.get(i), colType);
             }
             else if (isForeignKey(table, colNames.get(i)))
             {
-               values.append(generateForeignKey(client, table, colNames.get(i)));
+               val = generateForeignKey(client, table, colNames.get(i));
             }
             else if (isUnique(table, colNames.get(i)))
             {
-               values.append(generateUnique(table, colNames.get(i), colType));
+               val = generateUnique(table, colNames.get(i), colType);
             }
             else
             {
-               values.append(getData(table, colNames.get(i), colType, random.nextInt(rows)));
+               val = getData(table, colNames.get(i), colType, random.nextInt(rows));
             }
+
+            values.append(val);
+
             if (i < colTypes.size() - 1)
             {
                sql.append(", ");
@@ -1243,14 +1334,18 @@ public class SQLLoadGenerator
          }
          else
          {
-            generatePrimaryKey(client, table, colNames.get(i), colType);
+            val = generatePrimaryKey(client, table, colNames.get(i), colType);
          }
+
+         colValues.add(val);
       }
       sql.append(")");
                
       result.add(sql.toString());
       result.add(types.toString());
       result.add(values.toString());
+
+      insertIndex(client, table, colNames, colValues);
 
       return result;
    }
@@ -1266,6 +1361,7 @@ public class SQLLoadGenerator
       int index = 0;
       int rows = getRows(table);
       boolean ret = true;
+      String val;
 
       if (toFrom.containsKey(table))
          return null;
@@ -1284,17 +1380,20 @@ public class SQLLoadGenerator
       result.add(getJavaType(colTypes.get(index)));
       if (pk != null)
       {
-         String value = getPrimaryKey(client, table);
-         ret = deletePrimaryKey(client, table, value);
-         result.add(value);
+         val = getPrimaryKey(client, table);
+         ret = deletePrimaryKey(client, table, val);
+         result.add(val);
       }
       else
       {
-         result.add(getData(table, colNames.get(index), colTypes.get(index), random.nextInt(rows)));
+         val = getData(table, colNames.get(index), colTypes.get(index), random.nextInt(rows));
+         result.add(val);
       }
 
       if (!ret)
          return null;
+
+      deleteIndex(client, table, val);
 
       return result;
    }
@@ -1550,9 +1649,6 @@ public class SQLLoadGenerator
 
       activePKs.put(table, m);
 
-      if (isSerial(type))
-         return "DEFAULT";
-
       return newpk;
    }
 
@@ -1748,6 +1844,22 @@ public class SQLLoadGenerator
          Integer.parseInt(profile.getProperty(table + ".rows")) : defaultRows;
 
       return (int)(rowScale * rows);
+   }
+
+   /**
+    * Get SELECT distribution for a table
+    * @param table The table name
+    * @return The distribution identifier
+    */
+   private static int getSelectDistribution(String table)
+   {
+      int defaultDistribution = profile.getProperty("mix.select.index") != null ?
+         Integer.parseInt(profile.getProperty("mix.select.index")) : DEFAULT_MIX_SELECT_INDEX;
+
+      int distribution = profile.getProperty(table + ".mix.select.index") != null ?
+         Integer.parseInt(profile.getProperty(table + ".mix.select.index")) : defaultDistribution;
+
+      return distribution;
    }
 
    /**
@@ -2058,6 +2170,227 @@ public class SQLLoadGenerator
    }
 
    /**
+    * Create an index definition
+    * @param table The table name
+    * @param columns The columns
+    */
+   private static void defineIndex(String table, List<String> columns)
+   {
+      Map<IndexDef, Map<Integer, List<IndexVal>>> m = indexes.get(table);
+
+      if (m == null)
+         m = new HashMap<>();
+
+      IndexDef id = new IndexDef(columns);
+      m.put(id, new HashMap<>());
+
+      indexes.put(table, m);
+   }
+
+   /**
+    * Insert an index value
+    * @param client The client
+    * @param table The table name
+    * @param colNames The column names
+    * @param colValues The column values
+    */
+   private static void insertIndex(int client, String table, List<String> colNames, List<String> colValues)
+   {
+      Map<IndexDef, Map<Integer, List<IndexVal>>> m = indexes.get(table);
+
+      if (m != null)
+      {
+         String pk = primaryKeys.get(table);
+         int pkOffset = colNames.indexOf(pk);
+
+         for (Map.Entry<IndexDef, Map<Integer, List<IndexVal>>> entry : m.entrySet())
+         {
+            IndexDef id = entry.getKey();
+            Map<Integer, List<IndexVal>> cmap = entry.getValue();
+            List<String> ivValues = new ArrayList<>();
+
+            for (int i = 0; i < id.getColumns().size(); i++)
+            {
+               String col = id.getColumns().get(i);
+               int offset = colNames.indexOf(col);
+               ivValues.add(colValues.get(offset));
+            }
+
+            IndexVal iv = new IndexVal(colValues.get(pkOffset), ivValues);
+            List<IndexVal> liv = cmap.get(client);
+
+            if (liv == null)
+               liv = new ArrayList<>();
+
+            liv.add(iv);
+            cmap.put(client, liv);
+            m.put(id, cmap);
+         }
+      }
+   }
+
+   /**
+    * Update an index value
+    * @param client The client
+    * @param table The table name
+    * @param colNames The column names
+    * @param colValues The column values
+    */
+   private static void updateIndex(int client, String table, String pkVal, List<String> colNames, List<String> colValues)
+   {
+      Map<IndexDef, Map<Integer, List<IndexVal>>> m = indexes.get(table);
+
+      if (m != null)
+      {
+         for (Map.Entry<IndexDef, Map<Integer, List<IndexVal>>> entry : m.entrySet())
+         {
+            IndexDef id = entry.getKey();
+            Map<Integer, List<IndexVal>> cmap = entry.getValue();
+            List<IndexVal> liv = cmap.get(client);
+
+            if (liv != null)
+            {
+               IndexVal iv = null;
+               for (int i = 0; iv == null && i < liv.size(); i++)
+               {
+                  IndexVal v = liv.get(i);
+
+                  if (pkVal.equals(v.getPrimaryKey()))
+                  {
+                     boolean set = true;
+
+                     for (int j = 0; set && j < id.getColumns().size(); j++)
+                     {
+                        String idCol = id.getColumns().get(j);
+                        if (!colNames.contains(idCol))
+                           set = false;
+                     }
+
+                     if (set)
+                        iv = v;
+                  }
+               }
+
+               if (iv != null)
+               {
+                  List<String> ivValues = new ArrayList<>(id.getColumns().size());
+                  for (int i = 0; i < id.getColumns().size(); i++)
+                  {
+                     String col = id.getColumns().get(i);
+                     int offset = colNames.indexOf(col);
+                     ivValues.add(colValues.get(offset));
+                  }
+
+                  iv.setValues(ivValues);
+                  cmap.put(client, liv);
+                  m.put(id, cmap);
+               }
+            }
+         }
+      }
+   }
+
+   /**
+    * Delete an index value
+    * @param client The client
+    * @param table The table name
+    * @param colNames The column names
+    * @param colValues The column values
+    */
+   private static void deleteIndex(int client, String table, String pkValue)
+   {
+      Map<IndexDef, Map<Integer, List<IndexVal>>> m = indexes.get(table);
+
+      if (m != null)
+      {
+         for (Map.Entry<IndexDef, Map<Integer, List<IndexVal>>> entry : m.entrySet())
+         {
+            IndexDef id = entry.getKey();
+            Map<Integer, List<IndexVal>> cmap = entry.getValue();
+
+            List<IndexVal> liv = cmap.get(client);
+            if (liv != null)
+            {
+               Integer offset = null;
+               for (int i = 0; offset == null && i < liv.size(); i++)
+               {
+                  IndexVal iv = liv.get(i);
+
+                  if (pkValue.equals(iv.getPrimaryKey()))
+                     offset = Integer.valueOf(i);
+               }
+
+               if (offset != null)
+                  liv.remove(offset.intValue());
+
+               cmap.put(client, liv);
+               m.put(id, cmap);
+            }
+         }
+      }
+   }
+
+   /**
+    * Get a random index definition
+    * @param client The client
+    * @param table The table name
+    * @return The index definition; otherwise null
+    */
+   private static IndexDef getRandomIndexDefinition(int client, String table)
+   {
+      Map<IndexDef, Map<Integer, List<IndexVal>>> m = indexes.get(table);
+
+      if (m != null)
+      {
+         List<IndexDef> lid = new ArrayList<>();
+         for (Map.Entry<IndexDef, Map<Integer, List<IndexVal>>> entry : m.entrySet())
+         {
+            IndexDef id = entry.getKey();
+            Map<Integer, List<IndexVal>> cmap = entry.getValue();
+
+            if (cmap.containsKey(Integer.valueOf(0)) || cmap.containsKey(Integer.valueOf(client)))
+            {
+               lid.add(id);
+            }
+         }
+
+         if (lid.size() > 0)
+         {
+            return lid.get(random.nextInt(lid.size()));
+         }
+      }
+
+      return null;
+   }
+
+   /**
+    * Get a random index value
+    * @param client The client
+    * @param table The table name
+    * @param id The index definition
+    * @return The index value; otherwise null
+    */
+   private static IndexVal getRandomIndexValue(int client, String table, IndexDef id)
+   {
+      if (id != null)
+      {
+         Map<IndexDef, Map<Integer, List<IndexVal>>> m = indexes.get(table);
+         Map<Integer, List<IndexVal>> mliv = m.get(id);
+         List<IndexVal> liv = mliv.get(Integer.valueOf(client));
+
+         if (liv == null)
+            liv = mliv.get(Integer.valueOf(0));
+
+         if (liv != null && liv.size() > 0)
+         {
+            return liv.get(random.nextInt(liv.size()));
+         }
+      }
+
+      return null;
+   }
+
+   /**
     * Setup
     * @param name The name of the profile
     */
@@ -2129,6 +2462,167 @@ public class SQLLoadGenerator
       catch (Exception e)
       {
          e.printStackTrace();
+      }
+   }
+
+   /**
+    * Index definition
+    */
+   private static class IndexDef
+   {
+      private List<String> columns;
+
+      IndexDef(List<String> columns)
+      {
+         this.columns = columns;
+      }
+
+      List<String> getColumns()
+      {
+         return columns;
+      }
+
+      @Override
+      public String toString()
+      {
+         StringBuilder sb = new StringBuilder();
+
+         sb.append("IndexDef({");
+         for (int i = 0; i < columns.size(); i++)
+         {
+            sb.append(columns.get(i));
+            if (i < columns.size() - 1)
+               sb.append(", ");
+         }
+         sb.append("})");
+
+         return sb.toString();
+      }
+
+      @Override
+      public int hashCode()
+      {
+         int hash = 41;
+
+         for (String col : columns)
+         {
+            hash += 7 * Objects.hashCode(col);
+         }
+
+         return hash;
+      }
+
+      @Override
+      public boolean equals(Object o)
+      {
+         if (o == null || !(o instanceof IndexDef))
+            return false;
+
+         if (o == this)
+            return true;
+
+         IndexDef id = (IndexDef)o;
+
+         if (columns.size() != id.getColumns().size())
+            return false;
+
+         for (int i = 0; i < columns.size(); i++)
+         {
+            if (!Objects.equals(columns.get(i), id.getColumns().get(i)))
+               return false;
+         }
+
+         return true;
+      }
+   }
+
+   /**
+    * Index values
+    */
+   private static class IndexVal
+   {
+      private String pk;
+      private List<String> values;
+
+      IndexVal(String pk, List<String> values)
+      {
+         this.pk = pk;
+         this.values = values;
+      }
+
+      String getPrimaryKey()
+      {
+         return pk;
+      }
+
+      List<String> getValues()
+      {
+         return values;
+      }
+
+      void setValues(List<String> values)
+      {
+         this.values = values;
+      }
+
+      @Override
+      public String toString()
+      {
+         StringBuilder sb = new StringBuilder();
+
+         sb.append("IndexVal(");
+         sb.append(pk);
+         sb.append(", {");
+         for (int i = 0; i < values.size(); i++)
+         {
+            sb.append(values.get(i));
+            if (i < values.size() - 1)
+               sb.append(", ");
+         }
+         sb.append("})");
+
+         return sb.toString();
+      }
+
+      @Override
+      public int hashCode()
+      {
+         int hash = 41;
+
+         hash += 7 * Objects.hashCode(pk);
+
+         for (String val : values)
+         {
+            hash += 7 * Objects.hashCode(val);
+         }
+
+         return hash;
+      }
+
+      @Override
+      public boolean equals(Object o)
+      {
+         if (o == null || !(o instanceof IndexVal))
+            return false;
+
+         if (o == this)
+            return true;
+
+         IndexVal iv = (IndexVal)o;
+
+         if (!Objects.equals(pk, iv.getPrimaryKey()))
+            return false;
+
+         if (values.size() != iv.getValues().size())
+            return false;
+
+         for (int i = 0; i < values.size(); i++)
+         {
+            if (!Objects.equals(values.get(i), iv.getValues().get(i)))
+               return false;
+         }
+
+         return true;
       }
    }
 }
