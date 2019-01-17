@@ -96,6 +96,21 @@ public class SQLLoadGenerator
    /** Default SELECT for index usage */
    private static final int DEFAULT_MIX_SELECT_INDEX = 0;
 
+   /** Default SELECT for IN usage */
+   private static final int DEFAULT_MIX_SELECT_IN = 0;
+
+   /** Default count for IN usage */
+   private static final int DEFAULT_MIX_SELECT_IN_COUNT = 5;
+
+   /** SELECT: By Primary Key */
+   private static final int SELECT_PRIMARY_KEY = 0;
+
+   /** SELECT: By Index */
+   private static final int SELECT_INDEX = 1;
+
+   /** SELECT: By IN */
+   private static final int SELECT_IN = 2;
+
    /** Profile */
    private static Properties profile;
 
@@ -967,6 +982,8 @@ public class SQLLoadGenerator
       Set<String> fks = foreignKeys.get(table);
       IndexDef id = null;
       IndexVal iv = null;
+      int selectMode = SELECT_PRIMARY_KEY;
+      int selected = 0;
 
       StringBuilder sql = new StringBuilder();
       if (fks == null || fks.isEmpty())
@@ -982,36 +999,53 @@ public class SQLLoadGenerator
          sql.append(table);
          sql.append(" WHERE ");
 
-         int r = random.nextInt(101);
-         if (r < getSelectDistribution(table))
+         selectMode = getSelectMode(table);
+         switch (selectMode)
          {
-            id = getRandomIndexDefinition(client, table);
-            iv = getRandomIndexValue(client, table, id);
-
-            if (id != null && iv != null)
-            {
-               for (int i = 0; i < id.getColumns().size(); i++)
-               {
-                  sql.append(id.getColumns().get(i));
-                  sql.append(" = ?");
-
-                  if (i < id.getColumns().size() - 1)
-                     sql.append(" AND ");
-               }
-            }
-            else
-            {
-               id = null;
-               iv = null;
-
+            case SELECT_PRIMARY_KEY:
                sql.append(colNames.get(index));
                sql.append(" = ?");
-            }
-         }
-         else
-         {
-            sql.append(colNames.get(index));
-            sql.append(" = ?");
+               break;
+            case SELECT_INDEX:
+               id = getRandomIndexDefinition(client, table);
+               iv = getRandomIndexValue(client, table, id);
+
+               if (id != null && iv != null)
+               {
+                  for (int i = 0; i < id.getColumns().size(); i++)
+                  {
+                     sql.append(id.getColumns().get(i));
+                     sql.append(" = ?");
+
+                     if (i < id.getColumns().size() - 1)
+                        sql.append(" AND ");
+                  }
+               }
+               else
+               {
+                  selectMode = SELECT_PRIMARY_KEY;
+                  id = null;
+                  iv = null;
+
+                  sql.append(colNames.get(index));
+                  sql.append(" = ?");
+               }
+               break;
+            case SELECT_IN:
+               selected = random.nextInt(getINCount(table)) + 1;
+               sql.append(colNames.get(index));
+               sql.append(" IN (");
+               for (int i = 0; i < selected; i++)
+               {
+                  sql.append("?");
+
+                  if (i < selected - 1)
+                     sql.append(", ");
+               }
+               sql.append(")");
+               break;
+            default:
+               throw new Exception("Unknown SELECT mode: " + selectMode);
          }
       }
       else
@@ -1104,31 +1138,63 @@ public class SQLLoadGenerator
       }
                
       result.add(sql.toString());
-      if (id == null && iv == null)
+      switch (selectMode)
       {
-         result.add(getJavaType(colTypes.get(index)));
-         result.add(getPrimaryKey(client, table));
-      }
-      else
-      {
-         StringBuilder types = new StringBuilder();
-         StringBuilder values = new StringBuilder();
-         for (int i = 0; i < id.getColumns().size(); i++)
-         {
-            String colName = id.getColumns().get(i);
-            int colIndex = colNames.indexOf(colName);
-
-            types.append(getJavaType(colTypes.get(colIndex)));
-            values.append(iv.getValues().get(i));
-
-            if (i < id.getColumns().size() - 1)
+         case SELECT_PRIMARY_KEY:
+            result.add(getJavaType(colTypes.get(index)));
+            result.add(getPrimaryKey(client, table));
+            break;
+         case SELECT_INDEX:
+            StringBuilder types = new StringBuilder();
+            StringBuilder values = new StringBuilder();
+            for (int i = 0; i < id.getColumns().size(); i++)
             {
-               types.append("|");
-               values.append("|");
+               String colName = id.getColumns().get(i);
+               int colIndex = colNames.indexOf(colName);
+
+               types.append(getJavaType(colTypes.get(colIndex)));
+               values.append(iv.getValues().get(i));
+
+               if (i < id.getColumns().size() - 1)
+               {
+                  types.append("|");
+                  values.append("|");
+               }
             }
-         }
-         result.add(types.toString());
-         result.add(values.toString());
+            result.add(types.toString());
+            result.add(values.toString());
+            break;
+         case SELECT_IN:
+            types = new StringBuilder();
+            values = new StringBuilder();
+            String pkType = getJavaType(colTypes.get(index));
+            Set<String> pks = new HashSet<>();
+
+            for (int i = 0; i < selected; i++)
+            {
+               types.append(pkType);
+
+               String value = getPrimaryKey(client, table);
+               int counter = 0;
+               while (pks.contains(value) && counter < selected)
+               {
+                  value = getPrimaryKey(client, table);
+                  counter++;
+               }
+               pks.add(value);
+               values.append(value);
+
+               if (i < selected - 1)
+               {
+                  types.append("|");
+                  values.append("|");
+               }
+            }
+            result.add(types.toString());
+            result.add(values.toString());
+            break;
+         default:
+            throw new Exception("Unknown SELECT mode: " + selectMode);
       }
 
       return result;
@@ -1847,19 +1913,47 @@ public class SQLLoadGenerator
    }
 
    /**
-    * Get SELECT distribution for a table
+    * Get the SELECT mode
     * @param table The table name
-    * @return The distribution identifier
+    * @return The mode
     */
-   private static int getSelectDistribution(String table)
+   private static int getSelectMode(String table)
    {
-      int defaultDistribution = profile.getProperty("mix.select.index") != null ?
+      int defaultIndex = profile.getProperty("mix.select.index") != null ?
          Integer.parseInt(profile.getProperty("mix.select.index")) : DEFAULT_MIX_SELECT_INDEX;
 
-      int distribution = profile.getProperty(table + ".mix.select.index") != null ?
-         Integer.parseInt(profile.getProperty(table + ".mix.select.index")) : defaultDistribution;
+      int index = profile.getProperty(table + ".mix.select.index") != null ?
+         Integer.parseInt(profile.getProperty(table + ".mix.select.index")) : defaultIndex;
 
-      return distribution;
+      int defaultIn = profile.getProperty("mix.select.in") != null ?
+         Integer.parseInt(profile.getProperty("mix.select.in")) : DEFAULT_MIX_SELECT_IN;
+
+      int in = profile.getProperty(table + ".mix.select.in") != null ?
+         Integer.parseInt(profile.getProperty(table + ".mix.select.in")) : defaultIn;
+
+      int[] distribution = new int[100];
+
+      Arrays.fill(distribution, 0, index, SELECT_INDEX);
+      Arrays.fill(distribution, index, index + in, SELECT_IN);
+      Arrays.fill(distribution, index + in, 100, SELECT_PRIMARY_KEY);
+
+      return distribution[random.nextInt(100)];
+   }
+
+   /**
+    * Get the number of primary keys for IN
+    * @param table The table name
+    * @return The number
+    */
+   private static int getINCount(String table)
+   {
+      int defaultInCount = profile.getProperty("mix.select.in.count") != null ?
+         Integer.parseInt(profile.getProperty("mix.select.in.count")) : DEFAULT_MIX_SELECT_IN_COUNT;
+
+      int inCount = profile.getProperty(table + ".mix.select.in.count") != null ?
+         Integer.parseInt(profile.getProperty(table + ".mix.select.in.count")) : defaultInCount;
+
+      return inCount;
    }
 
    /**

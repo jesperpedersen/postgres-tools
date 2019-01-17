@@ -125,6 +125,14 @@ The global mix for ```SELECT``` statements.  Default is ```70```.
 
 The global mix for ```SELECT``` statements using the defined indexes.  Default is ```0```.
 
+### mix.select.in
+
+The global mix for ```SELECT``` statements using ```IN```.  Default is ```0```.
+
+### mix.select.in.count
+
+The maximum number of values for ```IN``` statements.  Default is ```5```.
+
 ### mix.update
 
 The global mix for ```UPDATE``` statements.  Default is ```15```.
@@ -268,6 +276,22 @@ The mix of ```SELECT``` for a specific table using its defined indexes. Example
 
 ```
 test.mix.select.index=20
+```
+
+### X.mix.select.in
+
+The mix of ```SELECT``` for a specific table using ```IN```.  Example
+
+```
+test.mix.select.in=5
+```
+
+### X.mix.select.in.count
+
+The maximum number of values for ```IN``` statements for a specific table. Example
+
+```
+test.mix.select.in.count=3
 ```
 
 ### X.mix.update
