@@ -1034,15 +1034,23 @@ public class SQLLoadGenerator
             case SELECT_IN:
                selected = random.nextInt(getINCount(table)) + 1;
                sql.append(colNames.get(index));
-               sql.append(" IN (");
-               for (int i = 0; i < selected; i++)
+               if (selected > 1)
                {
-                  sql.append("?");
+                  sql.append(" IN (");
+                  for (int i = 0; i < selected; i++)
+                  {
+                     sql.append("?");
 
-                  if (i < selected - 1)
-                     sql.append(", ");
+                     if (i < selected - 1)
+                        sql.append(", ");
+                  }
+                  sql.append(")");
                }
-               sql.append(")");
+               else
+               {
+                  selectMode = SELECT_PRIMARY_KEY;
+                  sql.append(" = ?");
+               }
                break;
             default:
                throw new Exception("Unknown SELECT mode: " + selectMode);
