@@ -1938,6 +1938,12 @@ public class SQLLoadGenerator
     */
    private static int getSelectMode(String table)
    {
+      int defaultPk = profile.getProperty("mix.select") != null ?
+         Integer.parseInt(profile.getProperty("mix.select")) : DEFAULT_MIX_SELECT;
+
+      int pk = profile.getProperty(table + ".mix.select") != null ?
+         Integer.parseInt(profile.getProperty(table + ".mix.select")) : defaultPk;
+
       int defaultIndex = profile.getProperty("mix.select.index") != null ?
          Integer.parseInt(profile.getProperty("mix.select.index")) : DEFAULT_MIX_SELECT_INDEX;
 
@@ -1950,11 +1956,14 @@ public class SQLLoadGenerator
       int in = profile.getProperty(table + ".mix.select.in") != null ?
          Integer.parseInt(profile.getProperty(table + ".mix.select.in")) : defaultIn;
 
+      int offset1 = (int)(100 * (((float)index) / (pk + index + in)));
+      int offset2 = (int)(100 * (((float)index + (float)in) / (pk + index + in)));
+
       int[] distribution = new int[100];
 
-      Arrays.fill(distribution, 0, index, SELECT_INDEX);
-      Arrays.fill(distribution, index, index + in, SELECT_IN);
-      Arrays.fill(distribution, index + in, 100, SELECT_PRIMARY_KEY);
+      Arrays.fill(distribution, 0, offset1, SELECT_INDEX);
+      Arrays.fill(distribution, offset1, offset2, SELECT_IN);
+      Arrays.fill(distribution, offset2, 100, SELECT_PRIMARY_KEY);
 
       return distribution[random.nextInt(100)];
    }
@@ -1984,16 +1993,24 @@ public class SQLLoadGenerator
    {
       if (fromTo.containsKey(table))
       {
+         int defaultFields = profile.getProperty("mix.update") != null ?
+            Integer.parseInt(profile.getProperty("mix.update")) : DEFAULT_MIX_UPDATE;
+
+         int fields = profile.getProperty(table + ".mix.update") != null ?
+            Integer.parseInt(profile.getProperty(table + ".mix.update")) : defaultFields;
+
          int defaultFK = profile.getProperty("mix.update.foreignkey") != null ?
             Integer.parseInt(profile.getProperty("mix.update.foreignkey")) : DEFAULT_MIX_UPDATE_FOREIGNKEY;
 
          int fk = profile.getProperty(table + ".mix.update.foreignkey") != null ?
             Integer.parseInt(profile.getProperty(table + ".mix.update.foreignkey")) : defaultFK;
 
+         int offset = (int)(100 * (((float)fk) / (fields + fk)));
+
          int[] distribution = new int[100];
 
-         Arrays.fill(distribution, 0, fk, UPDATE_FOREIGNKEY);
-         Arrays.fill(distribution, fk, 100, UPDATE_FIELDS);
+         Arrays.fill(distribution, 0, offset, UPDATE_FOREIGNKEY);
+         Arrays.fill(distribution, offset, 100, UPDATE_FIELDS);
 
          return distribution[random.nextInt(100)];
       }
