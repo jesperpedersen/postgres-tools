@@ -111,6 +111,15 @@ public class SQLLoadGenerator
    /** SELECT: By IN */
    private static final int SELECT_IN = 2;
 
+   /** Default mix for UPDATE of foreign key */
+   private static final int DEFAULT_MIX_UPDATE_FOREIGNKEY = 0;
+
+   /** UPDATE: Fields */
+   private static final int UPDATE_FIELDS = 0;
+
+   /** UPDATE: Foreign keys */
+   private static final int UPDATE_FOREIGNKEY = 1;
+
    /** Profile */
    private static Properties profile;
 
@@ -1216,7 +1225,7 @@ public class SQLLoadGenerator
    {
       List<String> result = new ArrayList<>(3);
       String pk = primaryKeys.get(table);
-      int index = 0;
+      int index = colNames.indexOf(pk);
       int rows = getRows(table);
       boolean[] updated = new boolean[colNames.size()];
       boolean proceed = false;
@@ -1224,9 +1233,7 @@ public class SQLLoadGenerator
       List<String> cv = new ArrayList<>(colNames.size());
       String val;
       String pkVal;
-
-      if (pk != null)
-         index = colNames.indexOf(pk);
+      int updateMode = getUpdateMode(table);
 
       StringBuilder sql = new StringBuilder();
       StringBuilder types = new StringBuilder();
@@ -1238,9 +1245,9 @@ public class SQLLoadGenerator
       for (int col = 0; col < colNames.size(); col++)
       {
          updated[col] = false;
-         if (pk == null && col != 0)
+         if (col != index)
          {
-            if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
+            if (updateMode == UPDATE_FIELDS && !isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
             {
                if (col > 0)
                {
@@ -1270,41 +1277,38 @@ public class SQLLoadGenerator
                updated[col] = true;
                proceed = true;
             }
-         }
-         else
-         {
-            if (col != index)
+            else if (updateMode == UPDATE_FOREIGNKEY && isForeignKey(table, colNames.get(col)))
             {
-               if (!isForeignKey(table, colNames.get(col)) && !isUnique(table, colNames.get(col)))
+               if (col > 0)
                {
-                  if (col > 0)
+                  for (int test = 0; test < col; test++)
                   {
-                     for (int test = 0; test < col; test++)
+                     if (updated[test])
                      {
-                        if (updated[test])
-                        {
-                           sql.append(", ");
-                           types.append("|");
-                           values.append("|");
-                           break;
-                        }
+                        sql.append(", ");
+                        types.append("|");
+                        values.append("|");
+                        break;
                      }
                   }
-
-                  sql.append(colNames.get(col));
-                  sql.append(" = ?");
-
-                  types.append(getJavaType(colTypes.get(col)));
-
-                  val = getData(table, colNames.get(col), colTypes.get(col), random.nextInt(rows));
-                  values.append(val);
-
-                  cn.add(colNames.get(col));
-                  cv.add(val);
-
-                  updated[col] = true;
-                  proceed = true;
                }
+
+               sql.append(colNames.get(col));
+               sql.append(" = ?");
+
+               types.append(getJavaType(colTypes.get(col)));
+
+               String fk = getForeignKey(table, colNames.get(col));
+               String fkTable = fk.substring(fk.indexOf(":") + 1, fk.lastIndexOf(":"));
+
+               val = getPrimaryKey(client, fkTable);
+               values.append(val);
+
+               cn.add(colNames.get(col));
+               cv.add(val);
+
+               updated[col] = true;
+               proceed = true;
             }
          }
       }
@@ -1322,14 +1326,8 @@ public class SQLLoadGenerator
 
       if (values.length() > 0)
          values.append("|");
-      if (pk != null)
-      {
-         pkVal = getPrimaryKey(client, table);
-      }
-      else
-      {
-         pkVal = getData(table, colNames.get(index), colTypes.get(index), random.nextInt(rows));
-      }
+
+      pkVal = getPrimaryKey(client, table);
       values.append(pkVal);
       cn.add(colNames.get(index));
       cv.add(pkVal);
@@ -1432,16 +1430,13 @@ public class SQLLoadGenerator
    {
       List<String> result = new ArrayList<>(3);
       String pk = primaryKeys.get(table);
-      int index = 0;
+      int index = colNames.indexOf(pk);
       int rows = getRows(table);
       boolean ret = true;
       String val;
 
       if (toFrom.containsKey(table))
          return null;
-
-      if (pk != null)
-         index = colNames.indexOf(pk);
 
       StringBuilder sql = new StringBuilder();
       sql.append("DELETE FROM ");
@@ -1452,17 +1447,10 @@ public class SQLLoadGenerator
                
       result.add(sql.toString());
       result.add(getJavaType(colTypes.get(index)));
-      if (pk != null)
-      {
-         val = getPrimaryKey(client, table);
-         ret = deletePrimaryKey(client, table, val);
-         result.add(val);
-      }
-      else
-      {
-         val = getData(table, colNames.get(index), colTypes.get(index), random.nextInt(rows));
-         result.add(val);
-      }
+
+      val = getPrimaryKey(client, table);
+      ret = deletePrimaryKey(client, table, val);
+      result.add(val);
 
       if (!ret)
          return null;
@@ -1790,6 +1778,29 @@ public class SQLLoadGenerator
    }
 
    /**
+    * Get foreign key
+    * @param table The table
+    * @param col The col
+    * @return The value
+    */
+   private static String getForeignKey(String table, String col)
+   {
+      Set<String> ts = foreignKeys.get(table);
+
+      if (ts != null)
+      {
+         for (String data : ts)
+         {
+            String c = data.substring(0, data.indexOf(":"));
+            if (c.equals(col))
+               return data;
+         }
+      }
+
+      return null;
+   }
+
+   /**
     * Generate foreign key
     * @param table The table
     * @param col The column
@@ -1962,6 +1973,32 @@ public class SQLLoadGenerator
          Integer.parseInt(profile.getProperty(table + ".mix.select.in.count")) : defaultInCount;
 
       return inCount;
+   }
+
+   /**
+    * Get the mode for an UPDATE
+    * @param table The table name
+    * @return The mode
+    */
+   private static int getUpdateMode(String table)
+   {
+      if (fromTo.containsKey(table))
+      {
+         int defaultFK = profile.getProperty("mix.update.foreignkey") != null ?
+            Integer.parseInt(profile.getProperty("mix.update.foreignkey")) : DEFAULT_MIX_UPDATE_FOREIGNKEY;
+
+         int fk = profile.getProperty(table + ".mix.update.foreignkey") != null ?
+            Integer.parseInt(profile.getProperty(table + ".mix.update.foreignkey")) : defaultFK;
+
+         int[] distribution = new int[100];
+
+         Arrays.fill(distribution, 0, fk, UPDATE_FOREIGNKEY);
+         Arrays.fill(distribution, fk, 100, UPDATE_FIELDS);
+
+         return distribution[random.nextInt(100)];
+      }
+
+      return UPDATE_FIELDS;
    }
 
    /**

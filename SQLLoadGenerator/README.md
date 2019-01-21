@@ -137,6 +137,10 @@ The maximum number of values for ```IN``` statements.  Default is ```5```.
 
 The global mix for ```UPDATE``` statements.  Default is ```15```.
 
+### mix.update.foreignkey
+
+The global mix for ```UPDATE``` statements updating a foreign key.  Default is ```0```.
+
 ### mix.insert
 
 The global mix for ```INSERT``` statements.  Default is ```10```.
@@ -300,6 +304,14 @@ The mix of ```UPDATE``` for a specific table. Example
 
 ```
 test.mix.update=20
+```
+
+### X.mix.update.foreignkey
+
+The mix for ```UPDATE``` for a specific table updating a foreign key. Example
+
+```
+test.mix.update.foreignkey=10
 ```
 
 ### X.mix.insert
