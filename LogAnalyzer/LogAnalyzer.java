@@ -1413,6 +1413,10 @@ public class LogAnalyzer
          {
             return INFO;
          }
+         else if ("DEBUG".equals(type))
+         {
+            return DEBUG1;
+         }
          else if ("DEBUG1".equals(type))
          {
             return DEBUG1;
@@ -1529,7 +1533,8 @@ public class LogAnalyzer
                      Double et = emptyTime.get(le.getDatabase());
                      if (et == null)
                         et = Double.valueOf(0);
-                     et += le.getDuration() + lle.get(lle.size() - 2).getDuration();
+                     if (lle.size() > 2)
+                        et += le.getDuration() + lle.get(lle.size() - 2).getDuration();
                      emptyTime.put(le.getDatabase(), et);
                   }
                   else
@@ -1594,6 +1599,13 @@ public class LogAnalyzer
 
             endDate = le.getTimestamp();
          }
+      }
+      catch (Exception e)
+      {
+         System.err.println("S  : " + s);
+         System.err.println("STR: " + str);
+         System.err.println("LE : " + le);
+         throw e;
       }
       finally
       {
