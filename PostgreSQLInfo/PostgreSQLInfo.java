@@ -23,6 +23,7 @@
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -206,6 +207,10 @@ public class PostgreSQLInfo
    private static SortedMap<String, String> parseConfiguration(Path p) throws Exception
    {
       SortedMap<String, String> sm = new TreeMap<>();
+
+      if (!p.toFile().exists())
+         throw new IOException("The file \'" + p.toAbsolutePath().toString() + "\' doesn\'t exists");
+
       List<String> content = readFile(p);
 
       for (String s : content)
