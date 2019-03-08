@@ -105,15 +105,18 @@ public class PostgreSQLInfo
       l.add("WAL: " + walPath);
       l.add("<br/>");
 
-      l.add("<h2>pg_hba.conf</h2>");
-      l.add("<pre>");
-      for (String s : pgHbaConf)
+      if (pgHbaConf.size() > 0)
       {
-         s = s.replaceAll("\t", " ");
-         s = s.replaceAll(" [ ]*", " ");
-         l.add(s);
+         l.add("<h2>pg_hba.conf</h2>");
+         l.add("<pre>");
+         for (String s : pgHbaConf)
+         {
+            s = s.replaceAll("\t", " ");
+            s = s.replaceAll(" [ ]*", " ");
+            l.add(s);
+         }
+         l.add("</pre>");
       }
-      l.add("</pre>");
       
       l.add("<h2>postgresql.conf</h2>");
       l.add("<table>");
@@ -177,14 +180,18 @@ public class PostgreSQLInfo
    private static List<String> parseAccess(Path p) throws Exception
    {
       List<String> l = new ArrayList<>();
-      List<String> content = readFile(p);
 
-      for (String s : content)
+      if (p.toFile().exists())
       {
-         s = s.trim();
-         if (!"".equals(s) && !s.startsWith("#"))
+         List<String> content = readFile(p);
+
+         for (String s : content)
          {
-            l.add(s);
+            s = s.trim();
+            if (!"".equals(s) && !s.startsWith("#"))
+            {
+               l.add(s);
+            }
          }
       }
 
