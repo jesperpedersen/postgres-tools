@@ -163,6 +163,42 @@ public class PostgreSQLInfo
 
       l.add("");
       l.add("<p/>");
+      l.add("<h3>Defaults</h3>");
+      SortedMap<String, String> dflt = new TreeMap<>(defaults.get(version));
+      for (String key : postgresqlConf.keySet())
+      {
+         dflt.remove(key);
+      }
+      l.add("<table>");
+      l.add("  <thead>");
+      l.add("    <tr align=\"left\">");
+      l.add("      <th><b>Key</b></th>");
+      l.add("      <th><b>Value</b></th>");
+      l.add("    </tr>");
+      l.add("  </thead>");
+
+      l.add("  <tbody>");
+      for (Map.Entry<String, String> entry : dflt.entrySet())
+      {
+         String key = entry.getKey();
+         String value = entry.getValue();
+
+         if (value.startsWith("\'"))
+         {
+            value = value.substring(1, value.length() - 1);
+         }
+
+         l.add("    <tr align=\"left\">");
+         l.add("      <td>" + key + "</td>");
+         l.add("      <td>" + value + "</td>");
+         l.add("    </tr>");
+      }
+      l.add("  </tbody>");
+
+      l.add("</table>");
+
+      l.add("");
+      l.add("<p/>");
       l.add("<div align=\"right\">");
       l.add("Generated on: " + new Date().toString());
       l.add("</div>");
