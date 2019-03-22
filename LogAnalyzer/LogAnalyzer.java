@@ -541,9 +541,18 @@ public class LogAnalyzer
          StringBuilder sb = new StringBuilder();
          for (int i = 0; i < stmts.size(); i++)
          {
-            sb = sb.append("<a href=\"" + (qn.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
-            if (i < stmts.size() - 1)
-               sb = sb.append("<p>");
+            if (!filterStatement(stmts.get(i), true))
+            {
+               sb = sb.append("<a href=\"" + (qn.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
+               if (i < stmts.size() - 1)
+                  sb = sb.append("<p>");
+            }
+            else
+            {
+               sb = sb.append(stmts.get(i));
+               if (i < stmts.size() - 1)
+                  sb = sb.append("<p>");
+            }
          }
 
          l.add("<tr>");
@@ -579,9 +588,18 @@ public class LogAnalyzer
          StringBuilder sb = new StringBuilder();
          for (int i = 0; i < stmts.size(); i++)
          {
-            sb = sb.append("<a href=\"" + (qn.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
-            if (i < stmts.size() - 1)
-               sb = sb.append("<p>");
+            if (!filterStatement(stmts.get(i), true))
+            {
+               sb = sb.append("<a href=\"" + (qn.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
+               if (i < stmts.size() - 1)
+                  sb = sb.append("<p>");
+            }
+            else
+            {
+               sb = sb.append(stmts.get(i));
+               if (i < stmts.size() - 1)
+                  sb = sb.append("<p>");
+            }
          }
 
          l.add("<tr>");
@@ -1636,10 +1654,24 @@ public class LogAnalyzer
     */
    private static boolean filterStatement(String stmt)
    {
+      return filterStatement(stmt, false);
+   }
+
+   /**
+    * Should the statement be filtered from the report
+    * @param stmt The statement
+    * @param all All statements
+    * @return The result
+    */
+   private static boolean filterStatement(String stmt, boolean all)
+   {
       if ("BEGIN".equals(stmt) ||
           stmt.startsWith("ROLLBACK") ||
           stmt.startsWith("COMMIT") ||
           stmt.startsWith("PREPARE"))
+         return true;
+
+      if (all && stmt.startsWith("SET"))
          return true;
 
       return false;
