@@ -2729,7 +2729,9 @@ public class QueryAnalyzer
                   }
                   else
                   {
-                     System.out.println("Unsupported column/type in " + query);
+                     System.out.println("Unsupported column/type");
+                     System.out.println("Query:  " + query);
+                     System.out.println("Column: " + currentColumn);
                   }
                }
                catch (Exception e)
@@ -3432,6 +3434,7 @@ public class QueryAnalyzer
    private static Integer getType(Connection c, Column column, String query, String table) throws Exception
    {
       String tableName;
+      Integer result = null;
 
       if (column.getTable() != null)
       {
@@ -3458,7 +3461,25 @@ public class QueryAnalyzer
          tableData = tables.get(tableName);
       }
 
-      return tableData.get(column.getColumnName().toLowerCase());
+      result = tableData.get(column.getColumnName().toLowerCase());
+
+      /* Lets assume that column names are unique across tables at this point */
+      if (result == null)
+      {
+         Set<String> usedTables = getUsedTables(c, query);
+         for (String usedTbl : usedTables)
+         {
+            tableData = tables.get(usedTbl);
+            result = tableData.get(column.getColumnName().toLowerCase());
+
+            if (result != null)
+            {
+               return result;
+            }
+         }
+      }
+
+      return result;
    }
 
    /**
