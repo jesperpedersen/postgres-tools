@@ -3688,6 +3688,7 @@ public class QueryAnalyzer
    private static boolean needsQuotes(Object o)
    {
       if (o instanceof String ||
+          o instanceof Character ||
           o instanceof java.sql.Date ||
           o instanceof java.sql.Time ||
           o instanceof java.sql.Timestamp)
