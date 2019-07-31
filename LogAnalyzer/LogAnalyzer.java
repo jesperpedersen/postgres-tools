@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2018 Jesper Pedersen <jesper.pedersen@comcast.net>
+ * Copyright (c) 2019 Jesper Pedersen <jesper.pedersen@comcast.net>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -1165,7 +1165,12 @@ public class LogAnalyzer
    private static void writeQueryAnalyzerFile(String id) throws Exception
    {
       List<String> l = new ArrayList<>();
-      List<String> queries = new ArrayList<>();
+      int select = 0;
+      int update = 0;
+      int insert = 0;
+      int delete = 0;
+      int count = 0;
+      int total = 0;
       
       l.add("# https://github.com/jesperpedersen/postgres-tools/tree/master/QueryAnalyzer");
       l.add("host=localhost # ChangeMe");
@@ -1174,16 +1179,39 @@ public class LogAnalyzer
       l.add("user=test # ChangeMe");
       l.add("password=test # ChangeMe");
 
-      for (String stmt : statements.get(id).keySet())
+      for (Map.Entry<String, String> entry : queryNames.get(id).entrySet())
       {
-         String key = queryNames.get(id).get(stmt);
-         if (key != null)
-            queries.add(key + "=" + stmt);
-      }
+         if (entry.getValue() != null)
+         {
+            Integer c = statements.get(id).get(entry.getKey());
+            int t = totaltime.get(id).get(entry.getKey()).intValue();
 
-      Collections.sort(queries);
-      l.addAll(queries);
-      
+            l.add("#!" + c + "," + t);
+            l.add(entry.getValue() + "=" + entry.getKey());
+
+            count += c;
+            total += t;
+
+            if (entry.getValue().indexOf("select") != -1)
+            {
+               select += c;
+            }
+            else if (entry.getValue().indexOf("update") != -1)
+            {
+               update += c;
+            }
+            if (entry.getValue().indexOf("insert") != -1)
+            {
+               insert += c;
+            }
+            if (entry.getValue().indexOf("delete") != -1)
+            {
+               delete += c;
+            }
+         }
+      }
+      l.add("#@" + count + "," + total + "," + select + "," + update + "," + insert + "," + delete);
+
       writeFile(Paths.get("report", id + ".properties"), l);
    }
    
