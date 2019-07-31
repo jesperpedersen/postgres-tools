@@ -24,6 +24,8 @@
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
+import java.io.LineNumberReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -47,6 +49,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.StringTokenizer;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
@@ -240,6 +243,12 @@ public class QueryAnalyzer
    /** Constraints    Name */
    private static Set<String> constraints = new TreeSet<>();
 
+   /** Stats          Query   Stat */
+   private static Map<String, QueryStat> stats = new TreeMap<>();
+
+   /** Total stats */
+   private static TotalStat totalStat = null;
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -275,6 +284,7 @@ public class QueryAnalyzer
       l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
       l.add("<head>");
       l.add("  <title>Query Analysis</title>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"queryanalyzer.css\"/>");
       l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
       l.add("</head>");
       l.add("<body>");
@@ -305,26 +315,90 @@ public class QueryAnalyzer
       l.add("</ul>");
       l.add("<p>");
       
+      if (totalStat != null)
+      {
+         l.add("<h2>Statistics</h2>");
+
+         l.add("<table>");
+         l.add("<tr>");
+         l.add("<td>SQL</td>");
+         l.add("<td>" + totalStat.getCount() + "</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td>Time</td>");
+         l.add("<td>" + totalStat.getTime() + "ms</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td>SELECT</td>");
+         l.add("<td>" + String.format("%.2f", totalStat.getCount() != 0 ?
+                                      ((totalStat.getSelect() / (double)totalStat.getCount()) * 100) : 0.0) + "%</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td>UPDATE</td>");
+         l.add("<td>" + String.format("%.2f", totalStat.getCount() != 0 ?
+                                      ((totalStat.getUpdate() / (double)totalStat.getCount()) * 100) : 0.0) + "%</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td>INSERT</td>");
+         l.add("<td>" + String.format("%.2f", totalStat.getCount() != 0 ?
+                                      ((totalStat.getInsert() / (double)totalStat.getCount()) * 100) : 0.0) + "%</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td>DELETE</td>");
+         l.add("<td>" + String.format("%.2f", totalStat.getCount() != 0 ?
+                                      ((totalStat.getDelete() / (double)totalStat.getCount()) * 100) : 0.0) + "%</td>");
+         l.add("</tr>");
+         l.add("</table>");
+
+         l.add("<p>");
+      }
+
       l.add("<h2>Queries</h2>");
       l.add("<table>");
       for (String q : queryIds)
       {
          l.add("<tr>");
+
+         StringBuilder link = new StringBuilder();
+         String color = null;
+         QueryStat queryStat = stats.get(q);
+
+         if (queryStat != null)
+         {
+            link = link.append("<div class=\"tooltip\">");
+         }
+
+         link = link.append("<a href=\"" + q + ".html\">" + q +"</a>");
+
+         if (queryStat != null)
+         {
+            link = link.append("<span class=\"tooltiptext\">");
+            link = link.append("<table>");
+            link = link.append("<tr>");
+            link = link.append("<td>SQL</td>");
+            link = link.append("<td>" + queryStat.getCount() + "</td>");
+            link = link.append("</tr>");
+            link = link.append("<tr>");
+            link = link.append("<td>Time</td>");
+            link = link.append("<td>" + queryStat.getTime() + "ms</td>");
+            link = link.append("</tr>");
+            link = link.append("</table>");
+
+            link = link.append("</span>");
+            link = link.append("</div>");
+         }
+
          if (Boolean.TRUE.equals(Boolean.valueOf(configuration.getProperty("issues", "true"))) && issues.containsKey(q))
          {
-            String color = COLOR_YELLOW;
+            color = COLOR_YELLOW;
             for (Issue is : issues.get(q))
             {
                if (ISSUE_TYPE_HIGH_PRIORITY == is.getType())
                   color = COLOR_RED;
             }
+         }
+         l.add("<td" + (color != null ? " style=\"background-color: " + color + "\"" : "") + ">" + link.toString() + "</td>");
 
-            l.add("<td style=\"background-color: " + color + "\"><a href=\"" + q + ".html\">" + q +"</a></td>");
-         }
-         else
-         {
-            l.add("<td><a href=\"" + q + ".html\">" + q +"</a></td>");
-         }
          l.add("<td>" + (plannerTimes.get(q) != null ? plannerTimes.get(q) + "ms" : "") + "</td>");
          l.add("<td>" + (plannerTimes.get(q) != null ? executorTimes.get(q) + "ms" : "") + "</td>");
          l.add("<td>" + (plans.get(q) != null ? plans.get(q) : "") + "</td>");
@@ -884,6 +958,24 @@ public class QueryAnalyzer
          l.add("</pre>");
       }
 
+      QueryStat queryStat = stats.get(queryId);
+      if (queryStat != null)
+      {
+         l.add("<p>");
+         l.add("<b>Statistics:</b>");
+         l.add("<table>");
+         l.add("<tr>");
+         l.add("<td>SQL</td>");
+         l.add("<td>" + queryStat.getCount() + "</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td>Time</td>");
+         l.add("<td>" + queryStat.getTime() + "ms</td>");
+         l.add("</tr>");
+         l.add("</table>");
+         l.add("<p>");
+      }
+
       if (replay)
       {
          l.add("<p>");
@@ -1422,6 +1514,43 @@ public class QueryAnalyzer
 
       writeFile(Paths.get("report", "suggestions.html"), l);
       writeFile(Paths.get("report", "suggestions.sql"), file);
+   }
+
+   /**
+    * Write queryanalyzer.css
+    */
+   private static void writeCSS() throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      l.add(".nohighlight {");
+      l.add("  color: black;");
+      l.add("  text-decoration: none;");
+      l.add("}");
+      l.add("");
+      l.add(".tooltip {");
+      l.add("  position: relative;");
+      l.add("  display: inline-block;");
+      l.add("  border-bottom: 1px dotted black;");
+      l.add("}");
+      l.add("");
+      l.add(".tooltip .tooltiptext {");
+      l.add("  visibility: hidden;");
+      l.add("  width: 300px;");
+      l.add("  background-color: #f2f2f2;");
+      l.add("  color: #000000;");
+      l.add("  text-align: left;");
+      l.add("  padding: 5px;");
+      l.add("  border-radius: 3px;");
+      l.add("  position: absolute;");
+      l.add("  z-index: 1;");
+      l.add("}");
+      l.add("");
+      l.add(".tooltip:hover .tooltiptext {");
+      l.add("  visibility: visible;");
+      l.add("}");
+
+      writeFile(Paths.get("report", "queryanalyzer.css"), l);
    }
 
    /**
@@ -2363,6 +2492,56 @@ public class QueryAnalyzer
       }
 
       return keys;
+   }
+
+   /**
+    * Process the statistics
+    * @param fn The file name
+    */
+   private static void processStatistics(String fn) throws Exception
+   {
+      FileReader fr = new FileReader(fn);
+      LineNumberReader lnr = new LineNumberReader(fr);
+      QueryStat qs = null;
+      String s;
+
+      s = lnr.readLine();
+      while (s != null)
+      {
+         if (s.startsWith("#!"))
+         {
+            StringTokenizer st = new StringTokenizer(s.substring(2), ",");
+            int c = Integer.valueOf(st.nextToken());
+            int t = Integer.valueOf(st.nextToken());
+
+            qs = new QueryStat(c, t);
+         }
+         else if (s.startsWith("query"))
+         {
+            String key = s.substring(0, s.indexOf("="));
+
+            if (qs != null)
+               stats.put(key, qs);
+
+            qs = null;
+         }
+         else if (s.startsWith("#@"))
+         {
+            StringTokenizer st = new StringTokenizer(s.substring(2), ",");
+            int c = Integer.valueOf(st.nextToken());
+            int t = Integer.valueOf(st.nextToken());
+            int se = Integer.valueOf(st.nextToken());
+            int u = Integer.valueOf(st.nextToken());
+            int i = Integer.valueOf(st.nextToken());
+            int d = Integer.valueOf(st.nextToken());
+
+            totalStat = new TotalStat(c, t, se, u, i, d);
+         }
+
+         s = lnr.readLine();
+      }
+
+      fr.close();
    }
 
    /**
@@ -4575,6 +4754,7 @@ public class QueryAnalyzer
          c = DriverManager.getConnection(url, user, password);
 
          startup(c);
+         processStatistics(config);
 
          SortedSet<String> queries = processQueries(c);
          writeIndex(queries);
@@ -4584,6 +4764,7 @@ public class QueryAnalyzer
          writeIndexes();
          writeEnvironment(c);
          writeSuggestions();
+         writeCSS();
       }
       catch (Exception e)
       {
@@ -4602,6 +4783,84 @@ public class QueryAnalyzer
                // Nothing to do
             }
          }
+      }
+   }
+
+   /**
+    * Query stat
+    */
+   static class QueryStat
+   {
+      private int count;
+      private int time;
+
+      QueryStat(int c, int t)
+      {
+         count = c;
+         time = t;
+      }
+
+      int getCount()
+      {
+         return count;
+      }
+
+      int getTime()
+      {
+         return time;
+      }
+   }
+
+   /**
+    * Total stat
+    */
+   static class TotalStat
+   {
+      private int count;
+      private int time;
+      private int select;
+      private int update;
+      private int insert;
+      private int delete;
+
+      TotalStat(int c, int t, int s, int u, int i, int d)
+      {
+         count = c;
+         time = t;
+         select = s;
+         update = u;
+         insert = i;
+         delete = d;
+      }
+
+      int getCount()
+      {
+         return count;
+      }
+
+      int getTime()
+      {
+         return time;
+      }
+
+      int getSelect()
+      {
+         return select;
+      }
+
+      int getUpdate()
+      {
+         return update;
+      }
+
+      int getInsert()
+      {
+         return insert;
+      }
+
+      int getDelete()
+      {
+         return delete;
       }
    }
 
