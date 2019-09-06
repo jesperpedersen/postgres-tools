@@ -122,6 +122,9 @@ public class LogAnalyzer
    /** Color 2 */
    private static final String COLOR_2 = "#ccffcc";
 
+   /** Color ERROR */
+   private static final String COLOR_ERROR = "#ff0000";
+
    /** Multi database */
    private static boolean multidb;
 
@@ -197,6 +200,9 @@ public class LogAnalyzer
    /** Empty time */
    private static Map<String, Double> emptyTime = new TreeMap<>();
    
+   /** Number of errors */
+   private static int errors = 0;
+
    /**
     * Write data to a file
     * @param p The path of the file
@@ -334,33 +340,36 @@ public class LogAnalyzer
       double totalWeight = 0;
       
       TreeMap<Integer, List<String>> counts = new TreeMap<>();
-      for (String stmt : statements.get(id).keySet())
+      if (statements.get(id) != null)
       {
-         Integer count = statements.get(id).get(stmt);
+         for (String stmt : statements.get(id).keySet())
+         {
+            Integer count = statements.get(id).get(stmt);
 
-         String upper = stmt.toUpperCase();
-         if (upper.startsWith("SELECT") || upper.startsWith("WITH"))
-         {
-            selectWeight += count;
-         }
-         else if (upper.startsWith("UPDATE"))
-         {
-            updateWeight += count;
-         }
-         else if (upper.startsWith("INSERT"))
-         {
-            insertWeight += count;
-         }
-         else if (upper.startsWith("DELETE"))
-         {
-            deleteWeight += count;
-         }
+            String upper = stmt.toUpperCase();
+            if (upper.startsWith("SELECT") || upper.startsWith("WITH"))
+            {
+               selectWeight += count;
+            }
+            else if (upper.startsWith("UPDATE"))
+            {
+               updateWeight += count;
+            }
+            else if (upper.startsWith("INSERT"))
+            {
+               insertWeight += count;
+            }
+            else if (upper.startsWith("DELETE"))
+            {
+               deleteWeight += count;
+            }
          
-         List<String> ls = counts.get(count);
-         if (ls == null)
-            ls = new ArrayList<>();
-         ls.add(stmt);
-         counts.put(count, ls);
+            List<String> ls = counts.get(count);
+            if (ls == null)
+               ls = new ArrayList<>();
+            ls.add(stmt);
+            counts.put(count, ls);
+         }
       }
 
       totalWeight = selectWeight + updateWeight + insertWeight + deleteWeight;
@@ -375,7 +384,17 @@ public class LogAnalyzer
          {
             String pname = (!multidb ? Integer.toString(processId) : id + "-" + processId);
             if (interaction)
-               interactionLinks.add("<a href=\"" + pname + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
+            {
+               if (!hasError(lle))
+               {
+                  interactionLinks.add("<a href=\"" + pname + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
+               }
+               else
+               {
+                  interactionLinks.add("<a style=\"background-color:#ff0000\" href=\"" + pname + ".html\">" + processId +
+                                       "</a>(" + executeCount + ")&nbsp;");
+               }
+            }
             writeInteractionReport(id, pname, lle);
          }
       }
@@ -384,47 +403,54 @@ public class LogAnalyzer
       int update = 1;
       int insert = 1;
       int delete = 1;
-      int padding = (int)Math.log10(statements.get(id).size()) + 1;
+      int padding = 1;
+
+      if (statements.get(id) != null)
+         padding = (int)Math.log10(statements.get(id).size()) + 1;
+
       Map<String, List<QuerySample>> qs = querySamples.get(id);
-      for (String sql : qs.keySet())
+      if (qs != null)
       {
-         boolean include = true;
-         String qName = multidb ? id + "-" : "";
-         String upper = sql.toUpperCase();
-         if (upper.startsWith("SELECT") || upper.startsWith("WITH"))
+         for (String sql : qs.keySet())
          {
-            qName += "query.select." + String.format("%0" + padding + "d", select);
-            select++;
-         }
-         else if (upper.startsWith("UPDATE"))
-         {
-            qName += "query.update." + String.format("%0" + padding + "d", update);
-            update++;
-         }
-         else if (upper.startsWith("INSERT"))
-         {
-            qName += "query.insert." + String.format("%0" + padding + "d", insert);
-            insert++;
-         }
-         else if (upper.startsWith("DELETE"))
-         {
-            qName += "query.delete." + String.format("%0" + padding + "d", delete);
-            delete++;
-         }
-         else
-         {
-            include = false;
-         }
+            boolean include = true;
+            String qName = multidb ? id + "-" : "";
+            String upper = sql.toUpperCase();
+            if (upper.startsWith("SELECT") || upper.startsWith("WITH"))
+            {
+               qName += "query.select." + String.format("%0" + padding + "d", select);
+               select++;
+            }
+            else if (upper.startsWith("UPDATE"))
+            {
+               qName += "query.update." + String.format("%0" + padding + "d", update);
+               update++;
+            }
+            else if (upper.startsWith("INSERT"))
+            {
+               qName += "query.insert." + String.format("%0" + padding + "d", insert);
+               insert++;
+            }
+            else if (upper.startsWith("DELETE"))
+            {
+               qName += "query.delete." + String.format("%0" + padding + "d", delete);
+               delete++;
+            }
+            else
+            {
+               include = false;
+            }
 
-         if (include)
-         {
-            Map<String, String> qn = queryNames.get(id);
-            if (qn == null)
-               qn = new TreeMap<>();
-            qn.put(sql, qName);
-            queryNames.put(id, qn);
+            if (include)
+            {
+               Map<String, String> qn = queryNames.get(id);
+               if (qn == null)
+                  qn = new TreeMap<>();
+               qn.put(sql, qName);
+               queryNames.put(id, qn);
 
-            writeQueryReport(id, sql, qName);
+               writeQueryReport(id, sql, qName);
+            }
          }
       }
 
@@ -437,7 +463,14 @@ public class LogAnalyzer
       l.add("<td><b>PARSE</b></td>");
       l.add("<td>" +  String.format("%.3f", (parseTime.get(id) != null ? parseTime.get(id) : 0.0)) + " ms</td>");
       l.add("<td><b>BEGIN</b></td>");
-      l.add("<td>" + (statements.get(id).get("BEGIN") != null ? statements.get(id).get("BEGIN") : 0) + "</td>");
+      if (statements.get(id) != null)
+      {
+         l.add("<td>" + (statements.get(id).get("BEGIN") != null ? statements.get(id).get("BEGIN") : 0) + "</td>");
+      }
+      else
+      {
+         l.add("<td>0</td>");
+      }
       l.add("<td><b>MAX CLIENTS</b></td>");
       l.add("<td>" + (maxClients.get(id) != null && maxClients.get(id) != 0 ? maxClients.get(id) : 1) + "</td>");
       l.add("</tr>");
@@ -447,10 +480,17 @@ public class LogAnalyzer
       l.add("<td><b>BIND</b></td>");
       l.add("<td>" +  String.format("%.3f", (bindTime.get(id) != null ? bindTime.get(id) : 0.0)) + " ms</td>");
       l.add("<td><b>COMMIT</b></td>");
-      l.add("<td>" + ((statements.get(id).get("COMMIT") != null ? statements.get(id).get("COMMIT") : 0) +
-                      (statements.get(id).get("COMMIT PREPARED") != null ? statements.get(id).get("COMMIT PREPARED") : 0)) + "</td>");
-      l.add("<td></td>");
-      l.add("<td></td>");
+      if (statements.get(id) != null)
+      {
+         l.add("<td>" + ((statements.get(id).get("COMMIT") != null ? statements.get(id).get("COMMIT") : 0) +
+                         (statements.get(id).get("COMMIT PREPARED") != null ? statements.get(id).get("COMMIT PREPARED") : 0)) + "</td>");
+      }
+      else
+      {
+         l.add("<td>0</td>");
+      }
+      l.add("<td><b>ERRORS</b></td>");
+      l.add("<td>" + errors + "</td>");
       l.add("</tr>");
       l.add("<tr>");
       l.add("<td><b>INSERT</b></td>");
@@ -458,8 +498,15 @@ public class LogAnalyzer
       l.add("<td><b>EXECUTE</b></td>");
       l.add("<td>" +  String.format("%.3f", (executeTime.get(id) != null ? executeTime.get(id) : 0.0)) + " ms</td>");
       l.add("<td><b>ROLLBACK</b></td>");
-      l.add("<td>" + ((statements.get(id).get("ROLLBACK") != null ? statements.get(id).get("ROLLBACK") : 0) +
-                      (statements.get(id).get("ROLLBACK PREPARED") != null ? statements.get(id).get("ROLLBACK PREPARED") : 0)) + "</td>");
+      if (statements.get(id) != null)
+      {
+         l.add("<td>" + ((statements.get(id).get("ROLLBACK") != null ? statements.get(id).get("ROLLBACK") : 0) +
+                         (statements.get(id).get("ROLLBACK PREPARED") != null ? statements.get(id).get("ROLLBACK PREPARED") : 0)) + "</td>");
+      }
+      else
+      {
+         l.add("<td>0</td>");
+      }
       l.add("<td></td>");
       l.add("<td></td>");
       l.add("</tr>");
@@ -524,15 +571,18 @@ public class LogAnalyzer
       l.add("<h2>Total time</h2>");
       TreeMap<Double, List<String>> times = new TreeMap<>();
       Map<String, Double> tt = totaltime.get(id);
-      for (String stmt : tt.keySet())
+      if (tt != null)
       {
-         Double d = tt.get(stmt);
-         List<String> stmts = times.get(d);
-         if (stmts == null)
-            stmts = new ArrayList<>();
+         for (String stmt : tt.keySet())
+         {
+            Double d = tt.get(stmt);
+            List<String> stmts = times.get(d);
+            if (stmts == null)
+               stmts = new ArrayList<>();
 
-         stmts.add(stmt);
-         times.put(d, stmts);
+            stmts.add(stmt);
+            times.put(d, stmts);
+         }
       }
 
       l.add("<table border=\"1\">");
@@ -572,15 +622,18 @@ public class LogAnalyzer
       l.add("<h2>Max time</h2>");
       times = new TreeMap<>();
       Map<String, Double> mt = maxtime.get(id);
-      for (String stmt : mt.keySet())
+      if (mt != null)
       {
-         Double d = mt.get(stmt);
-         List<String> stmts = times.get(d);
-         if (stmts == null)
-            stmts = new ArrayList<>();
+         for (String stmt : mt.keySet())
+         {
+            Double d = mt.get(stmt);
+            List<String> stmts = times.get(d);
+            if (stmts == null)
+               stmts = new ArrayList<>();
 
-         stmts.add(stmt);
-         times.put(d, stmts);
+            stmts.add(stmt);
+            times.put(d, stmts);
+         }
       }
 
       l.add("<table border=\"1\">");
@@ -629,9 +682,12 @@ public class LogAnalyzer
             hMin = Double.valueOf(0);
 
          double delta = (hMax - hMin) / (double)histogramCount;
-         for (Double d : histogramValues.get(id))
+         if (histogramValues.get(id) != null)
          {
-            h[Math.min(histogramCount - 1, (int)((d / hMax) * histogramCount))]++;
+            for (Double d : histogramValues.get(id))
+            {
+               h[Math.min(histogramCount - 1, (int)((d / hMax) * histogramCount))]++;
+            }
          }
 
          l.add("<div id=\"txhistogram\" style=\"width:1024px; height:768px;\">");
@@ -690,7 +746,9 @@ public class LogAnalyzer
       int begin = 0;
       int commit = 0;
       int rollback = 0;
+      int error = 0;
       boolean color = true;
+      boolean inError = false;
       boolean inTransaction = false;
       double transactionTime = 0.0;
       long pIdleInTransaction = 0;
@@ -698,6 +756,8 @@ public class LogAnalyzer
       long pWaitTime = 0;
       LogEntry beginLE = null;
       LogEntry previousLE = null;
+      String errorText = "";
+      String contextText = "";
 
       transactionTimeline.add("Time,Duration");
       
@@ -1003,6 +1063,34 @@ public class LogAnalyzer
                idleInTransaction = 0;
             }
          }
+         else if (le.isError())
+         {
+            inError = true;
+            error++;
+            errorText = le.getFullStatement().substring(8);
+         }
+         else if (inError)
+         {
+            if (le.getFullStatement().startsWith("CONTEXT:"))
+            {
+               contextText = le.getFullStatement().substring(10);
+            }
+            else if (le.getFullStatement().startsWith("STATEMENT:"))
+            {
+               if (interaction)
+               {
+                  queries.add("<tr style=\"background-color: " + COLOR_ERROR + ";\">");
+                  queries.add("<td></td>");
+                  queries.add("<td></td>");
+                  queries.add("<td>E</td>");
+                  queries.add("<td>" + errorText + "<p/>" + contextText + "<p/>" +
+                              le.getFullStatement().substring(12).replace('$', '?') + "</td>");
+                  queries.add("</tr>");
+               }
+
+               inError = false;
+            }
+         }
          previousLE = le;
       }
 
@@ -1061,6 +1149,10 @@ public class LogAnalyzer
          l.add("<tr>");
          l.add("<td><b>ROLLBACK</b></td>");
          l.add("<td>" + rollback + "</td>");
+         l.add("</tr>");
+         l.add("<tr>");
+         l.add("<td><b>ERROR</b></td>");
+         l.add("<td>" + error + "</td>");
          l.add("</tr>");
 
          if (keepRaw)
@@ -1182,34 +1274,37 @@ public class LogAnalyzer
       l.add("user=test # ChangeMe");
       l.add("password=test # ChangeMe");
 
-      for (Map.Entry<String, String> entry : queryNames.get(id).entrySet())
+      if (queryNames.get(id) != null)
       {
-         if (entry.getValue() != null)
+         for (Map.Entry<String, String> entry : queryNames.get(id).entrySet())
          {
-            Integer c = statements.get(id).get(entry.getKey());
-            int t = totaltime.get(id).get(entry.getKey()).intValue();
+            if (entry.getValue() != null)
+            {
+               Integer c = statements.get(id).get(entry.getKey());
+               int t = totaltime.get(id).get(entry.getKey()).intValue();
 
-            l.add("#!" + c + "," + t);
-            l.add(entry.getValue() + "=" + entry.getKey());
+               l.add("#!" + c + "," + t);
+               l.add(entry.getValue() + "=" + entry.getKey());
 
-            count += c;
-            total += t;
+               count += c;
+               total += t;
 
-            if (entry.getValue().indexOf("select") != -1)
-            {
-               select += c;
-            }
-            else if (entry.getValue().indexOf("update") != -1)
-            {
-               update += c;
-            }
-            if (entry.getValue().indexOf("insert") != -1)
-            {
-               insert += c;
-            }
-            if (entry.getValue().indexOf("delete") != -1)
-            {
-               delete += c;
+               if (entry.getValue().indexOf("select") != -1)
+               {
+                  select += c;
+               }
+               else if (entry.getValue().indexOf("update") != -1)
+               {
+                  update += c;
+               }
+               if (entry.getValue().indexOf("insert") != -1)
+               {
+                  insert += c;
+               }
+               if (entry.getValue().indexOf("delete") != -1)
+               {
+                  delete += c;
+               }
             }
          }
       }
@@ -1393,13 +1488,29 @@ public class LogAnalyzer
 
       for (LogEntry le : lle)
       {
-         if (le.isExecute() || le.isStmt())
+         if (le.isExecute() || le.isStmt() || le.isError())
             count++;
       }
       
       return count;
    }
    
+   /**
+    * Is there an error in the interaction
+    * @param lle The interactions
+    * @return True, if error; otherwise false
+    */
+   private static boolean hasError(List<LogEntry> lle)
+   {
+      for (LogEntry le : lle)
+      {
+         if (le.isError())
+            return true;
+      }
+
+      return false;
+   }
+
    /**
     * Get the type of the log line
     * @param s The string
@@ -1645,6 +1756,10 @@ public class LogAnalyzer
                      clients.put(le.getDatabase(), c);
                   }
                }
+               else if (le.isError())
+               {
+                  errors++;
+               }
             }
 
             if (startDate == null)
@@ -1840,6 +1955,7 @@ public class LogAnalyzer
       private String statement;
       private boolean prepared;
       private double duration;
+      private boolean error;
       private boolean parse;
       private boolean bind;
       private boolean execute;
@@ -1884,6 +2000,8 @@ public class LogAnalyzer
 
          this.duration = getDuration(this.fullStatement);
 
+         this.error = isError(this.fullStatement);
+
          this.parse = isParse(this.fullStatement);
          this.bind = false;
          this.execute = false;
@@ -1917,6 +2035,11 @@ public class LogAnalyzer
                statement = "ROLLBACK PREPARED";
             }
          }
+      }
+
+      String getFullStatement()
+      {
+         return fullStatement;
       }
 
       int getProcessId()
@@ -1974,6 +2097,11 @@ public class LogAnalyzer
          return prepared;
       }
       
+      boolean isError()
+      {
+         return error;
+      }
+
       boolean isParse()
       {
          return parse;
@@ -1992,6 +2120,21 @@ public class LogAnalyzer
       boolean isStmt()
       {
          return stmt;
+      }
+
+      /**
+       * Is error
+       * @param line The log line
+       * @return True if error, otherwise false
+       */
+      private boolean isError(String line)
+      {
+         if (line.startsWith("ERROR:"))
+         {
+            return true;
+         }
+
+         return false;
       }
 
       /**
