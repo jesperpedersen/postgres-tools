@@ -155,8 +155,8 @@ public class LogAnalyzer
    /** Histogram values */
    private static Map<String, List<Double>> histogramValues = new TreeMap<>();
 
-   /** Raw data:      Db          Process  Log */
-   private static Map<String, Map<Integer, List<String>>> rawData = new TreeMap<>();
+   /** Raw data:      Db          Process  Writer */
+   private static Map<String, Map<Integer, BufferedWriter>> rawData = new TreeMap<>();
 
    /** Data:          Db          Process  LogEntry */
    private static Map<String, Map<Integer, List<LogEntry>>> data = new TreeMap<>();
@@ -220,6 +220,40 @@ public class LogAnalyzer
          bw.newLine();
       }
 
+      bw.flush();
+      bw.close();
+   }
+
+   /**
+    * Open an append file
+    * @param p The file path
+    * @return The writer
+    */
+   private static BufferedWriter appendOpen(Path p) throws Exception
+   {
+      return Files.newBufferedWriter(p,
+                                     StandardOpenOption.CREATE,
+                                     StandardOpenOption.WRITE,
+                                     StandardOpenOption.APPEND);
+   }
+
+   /**
+    * Append data to a file
+    * @param p The file path
+    * @param s The data
+    */
+   private static void appendWrite(BufferedWriter bw, String s) throws Exception
+   {
+      bw.write(s, 0, s.length());
+      bw.newLine();
+   }
+
+   /**
+    * Close append file
+    * @param bw The writer
+    */
+   private static void appendClose(BufferedWriter bw) throws Exception
+   {
       bw.flush();
       bw.close();
    }
@@ -1662,16 +1696,18 @@ public class LogAnalyzer
                // Raw data insert
                if (keepRaw)
                {
-                  Map<Integer, List<String>> rd = rawData.get(le.getDatabase());
+                  Map<Integer, BufferedWriter> rd = rawData.get(le.getDatabase());
                   if (rd == null)
                      rd = new TreeMap<>();
 
-                  List<String> ls = rd.get(le.getProcessId());
-                  if (ls == null)
-                     ls = new ArrayList<>();
+                  BufferedWriter bw = rd.get(le.getProcessId());
+                  if (bw == null)
+                     bw = appendOpen(Paths.get("report", (!multidb ? "" : le.getDatabase() + "-") + le.getProcessId() + ".log"));
+
                   if (str != null)
-                     ls.add(str);
-                  rd.put(le.getProcessId(), ls);
+                     appendWrite(bw, str);
+
+                  rd.put(le.getProcessId(), bw);
                   rawData.put(le.getDatabase(), rd);
                }
 
@@ -1797,12 +1833,12 @@ public class LogAnalyzer
 
       if (keepRaw)
       {
-         for (Map.Entry<String, Map<Integer, List<String>>> e : rawData.entrySet())
+         for (Map.Entry<String, Map<Integer, BufferedWriter>> e : rawData.entrySet())
          {
             for (Integer proc : e.getValue().keySet())
             {
-               List<String> write = e.getValue().get(proc);
-               writeFile(Paths.get("report", (!multidb ? "" : e.getKey() + "-") + proc + ".log"), write);
+               BufferedWriter bw = e.getValue().get(proc);
+               appendClose(bw);
             }
          }
       }
