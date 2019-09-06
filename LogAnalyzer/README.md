@@ -29,6 +29,9 @@ wget http://dygraphs.com/2.0.0/dygraph.min.js
 wget http://dygraphs.com/2.0.0/dygraph.min.css
 ```
 
+Note, in order to view the graphs `privacy.file_unique_origin` must be `false` (about:config)
+starting with Firefox 68. Remember to set it back to `true` after.
+
 ## Usage
 
 ### Configure PostgreSQL
