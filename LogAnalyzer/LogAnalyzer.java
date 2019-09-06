@@ -758,6 +758,7 @@ public class LogAnalyzer
       LogEntry previousLE = null;
       String errorText = "";
       String contextText = "";
+      String disconnectText = "";
 
       transactionTimeline.add("Time,Duration");
       
@@ -1102,6 +1103,13 @@ public class LogAnalyzer
 
       if (interaction)
       {
+         LogEntry lastEntry = lle.get(lle.size() - 1);
+         if (lastEntry.getFullStatement().indexOf("disconnection") != -1)
+         {
+            int offset = lastEntry.getFullStatement().indexOf("disconnection");
+            disconnectText = lastEntry.getFullStatement().substring(offset);
+         }
+
          List<String> l = new ArrayList<>();
          l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
          l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
@@ -1180,6 +1188,9 @@ public class LogAnalyzer
          l.add("<table border=\"1\">");
          l.addAll(queries);
          l.add("</table>");
+
+         l.add("<p>");
+         l.add(disconnectText);
 
          l.add("<p>");
          l.add("<a href=\"index.html\">Back</a>");

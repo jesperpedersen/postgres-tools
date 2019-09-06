@@ -46,6 +46,7 @@ log_filename = 'postgresql.log'
 log_rotation_age = 0
 log_min_duration_statement = 0
 log_line_prefix = '%p [%m] [%x] '
+log_disconnections = on
 ```
 
 and do a run of the SQL statement that you want to analyze.
