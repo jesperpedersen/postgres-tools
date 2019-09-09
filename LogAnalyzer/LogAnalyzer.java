@@ -2093,10 +2093,18 @@ public class LogAnalyzer
             }
          }
          writeCSS();
+
+         if (errors > 0)
+         {
+            System.exit(1);
+         }
+
+         System.exit(0);
       }
       catch (Exception e)
       {
          e.printStackTrace();
+         System.exit(-1);
       }
    }
 
