@@ -585,7 +585,15 @@ public class LogAnalyzer
             String v = ls.get(i);
             if (!filterStatement(v))
             {
-               sb = sb.append("<a href=\"" + (queryNames.get(id).get(v)) + ".html\" class=\"nohighlight\">" + v + "</a>");
+               if (queryNames.get(id) != null && queryNames.get(id).get(v) != null)
+               {
+                  sb = sb.append("<a href=\"" + (queryNames.get(id).get(v)) + ".html\" class=\"nohighlight\">" + v + "</a>");
+               }
+               else
+               {
+                  sb = sb.append(v);
+               }
+
                if (i < ls.size() - 1)
                   sb = sb.append("<p>");
             }
