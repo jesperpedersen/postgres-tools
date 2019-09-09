@@ -2203,7 +2203,7 @@ public class LogAnalyzer
          {
             statement = line.substring(line.indexOf(":", offset) + 2);
             statement = statement.replace('$', '?');
-            prepared = line.indexOf("<unnamed>") != -1;
+            prepared = line.indexOf("<unnamed>") == -1;
             return true;
          }
       
@@ -2222,7 +2222,7 @@ public class LogAnalyzer
          {
             statement = line.substring(line.indexOf(":", offset) + 2);
             statement = statement.replace('$', '?');
-            prepared = line.indexOf("<unnamed>") != -1;
+            prepared = line.indexOf("<unnamed>") == -1;
             return true;
          }
       
@@ -2241,7 +2241,7 @@ public class LogAnalyzer
          {
             statement = line.substring(line.indexOf(":", offset) + 2);
             statement = statement.replace('$', '?');
-            prepared = line.indexOf("<unnamed>") != -1;
+            prepared = line.indexOf("<unnamed>") == -1;
             return true;
          }
          
