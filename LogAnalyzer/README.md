@@ -106,6 +106,6 @@ The report shows
 * The distribution of ```SELECT```, ```UPDATE```, ```INSERT``` and ```DELETE```
 * The times spent in ```PARSE```, ```BIND``` and ```EXECUTE``` phase
 * The number of executed queries, and the query itself
-* The total and maximum time spent in queries (top 20)
+* The total and maximum time spent in queries
 * The interaction of each backend with time and transaction information
 * Histogram and time line of each query

@@ -603,105 +603,16 @@ public class LogAnalyzer
       l.add("<p>");
 
       l.add("<h2>Total time</h2>");
-      TreeMap<Double, List<String>> times = new TreeMap<>();
-      Map<String, Double> tt = totaltime.get(id);
-      if (tt != null)
-      {
-         for (String stmt : tt.keySet())
-         {
-            Double d = tt.get(stmt);
-            List<String> stmts = times.get(d);
-            if (stmts == null)
-               stmts = new ArrayList<>();
-
-            stmts.add(stmt);
-            times.put(d, stmts);
-         }
-      }
-
-      l.add("<table border=\"1\">");
-      int count = 0;
-      Map<String, String> qn = queryNames.get(id);
-      for (Double d : times.descendingKeySet())
-      {
-         List<String> stmts = times.get(d);
-         StringBuilder sb = new StringBuilder();
-         for (int i = 0; i < stmts.size(); i++)
-         {
-            if (!filterStatement(stmts.get(i), true))
-            {
-               sb = sb.append("<a href=\"" + (qn.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
-               if (i < stmts.size() - 1)
-                  sb = sb.append("<p>");
-            }
-            else
-            {
-               sb = sb.append(stmts.get(i));
-               if (i < stmts.size() - 1)
-                  sb = sb.append("<p>");
-            }
-         }
-
-         l.add("<tr>");
-         l.add("<td>" + String.format("%.3f", d) + "ms</td>");
-         l.add("<td>" + sb.toString() + "</td>");
-         l.add("</tr>");
-         count++;
-
-         if (count == 20)
-            break;
-      }
-      l.add("</table>");
+      l.addAll(getTimeInfo(id, 20));
+      writeTimeReport(id);
+      l.add("<p>");
+      l.add("<a href=\"" + (multidb ? id + "-" : "") + "totaltime.html\">Report</a>");
       
       l.add("<h2>Max time</h2>");
-      times = new TreeMap<>();
-      Map<String, Double> mt = maxtime.get(id);
-      if (mt != null)
-      {
-         for (String stmt : mt.keySet())
-         {
-            Double d = mt.get(stmt);
-            List<String> stmts = times.get(d);
-            if (stmts == null)
-               stmts = new ArrayList<>();
-
-            stmts.add(stmt);
-            times.put(d, stmts);
-         }
-      }
-
-      l.add("<table border=\"1\">");
-      count = 0;
-      for (Double d : times.descendingKeySet())
-      {
-         List<String> stmts = times.get(d);
-         StringBuilder sb = new StringBuilder();
-         for (int i = 0; i < stmts.size(); i++)
-         {
-            if (!filterStatement(stmts.get(i), true))
-            {
-               sb = sb.append("<a href=\"" + (qn.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
-               if (i < stmts.size() - 1)
-                  sb = sb.append("<p>");
-            }
-            else
-            {
-               sb = sb.append(stmts.get(i));
-               if (i < stmts.size() - 1)
-                  sb = sb.append("<p>");
-            }
-         }
-
-         l.add("<tr>");
-         l.add("<td>" + String.format("%.3f", d) + "ms</td>");
-         l.add("<td>" + sb.toString() + "</td>");
-         l.add("</tr>");
-         count++;
-
-         if (count == 20)
-            break;
-      }
-      l.add("</table>");
+      l.addAll(getMaxInfo(id, 20));
+      writeMaxReport(id);
+      l.add("<p>");
+      l.add("<a href=\"" + (multidb ? id + "-" : "") + "maxtime.html\">Report</a>");
 
       if (histogramCount > 0)
       {
@@ -1530,6 +1441,70 @@ public class LogAnalyzer
    }
 
    /**
+    * Write the time report
+    * @param id The database identifier
+    */
+   private static void writeTimeReport(String id) throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
+      l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+      l.add("");
+      l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
+      l.add("<head>");
+      l.add("  <title>Log Analysis: Total time</title>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
+      l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+      l.add("</head>");
+      l.add("<body>");
+      l.add("<h1>Total time</h1>");
+
+      l.addAll(getTimeInfo(id, Integer.MAX_VALUE));
+
+      l.add("<p>");
+      l.add("<a href=\"index.html\">Back</a>");
+      l.add("</body>");
+      l.add("</html>");
+
+      writeFile(Paths.get("report", (multidb ? id + "-" : "") + "totaltime.html"), l);
+   }
+
+   /**
+    * Write the max report
+    * @param id The database identifier
+    */
+   private static void writeMaxReport(String id) throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
+      l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+      l.add("");
+      l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
+      l.add("<head>");
+      l.add("  <title>Log Analysis: Max time</title>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
+      l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+      l.add("</head>");
+      l.add("<body>");
+      l.add("<h1>Max time</h1>");
+
+      l.addAll(getMaxInfo(id, Integer.MAX_VALUE));
+
+      l.add("<p>");
+      l.add("<a href=\"index.html\">Back</a>");
+      l.add("</body>");
+      l.add("</html>");
+
+      writeFile(Paths.get("report", (multidb ? id + "-" : "") + "maxtime.html"), l);
+   }
+
+   /**
     * Get the execute count
     * @param lle The interactions
     * @return The count
@@ -1665,6 +1640,125 @@ public class LogAnalyzer
       }
 
       return UNKNOWN;
+   }
+
+   /**
+    * Get the lines for the time report
+    */
+   private static List<String> getTimeInfo(String id, int cutoff)
+   {
+      List<String> l = new ArrayList<>();
+      TreeMap<Double, List<String>> times = new TreeMap<>();
+      int count = 0;
+
+      Map<String, Double> tt = totaltime.get(id);
+      if (tt != null)
+      {
+         for (String stmt : tt.keySet())
+         {
+            Double d = tt.get(stmt);
+            List<String> stmts = times.get(d);
+            if (stmts == null)
+               stmts = new ArrayList<>();
+
+            stmts.add(stmt);
+            times.put(d, stmts);
+         }
+      }
+
+      l.add("<table border=\"1\">");
+      Map<String, String> qn = queryNames.get(id);
+      for (Double d : times.descendingKeySet())
+      {
+         List<String> stmts = times.get(d);
+         StringBuilder sb = new StringBuilder();
+         for (int i = 0; i < stmts.size(); i++)
+         {
+            if (!filterStatement(stmts.get(i), true) && qn.get(stmts.get(i)) != null)
+            {
+               sb = sb.append("<a href=\"" + (qn.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
+               if (i < stmts.size() - 1)
+                  sb = sb.append("<p>");
+            }
+            else
+            {
+               sb = sb.append(stmts.get(i));
+               if (i < stmts.size() - 1)
+                  sb = sb.append("<p>");
+            }
+         }
+
+         l.add("<tr>");
+         l.add("<td>" + String.format("%.3f", d) + "ms</td>");
+         l.add("<td>" + sb.toString() + "</td>");
+         l.add("</tr>");
+         count++;
+
+         if (count == cutoff)
+            break;
+      }
+      l.add("</table>");
+      return l;
+   }
+
+   /**
+    * Get the lines for the time report
+    */
+   private static List<String> getMaxInfo(String id, int cutoff)
+   {
+      List<String> l = new ArrayList<>();
+      TreeMap<Double, List<String>> times = new TreeMap<>();
+      Map<String, Double> mt = maxtime.get(id);
+      int count = 0;
+
+      if (mt != null)
+      {
+         for (String stmt : mt.keySet())
+         {
+            Double d = mt.get(stmt);
+            List<String> stmts = times.get(d);
+            if (stmts == null)
+               stmts = new ArrayList<>();
+
+            stmts.add(stmt);
+            times.put(d, stmts);
+         }
+      }
+
+      l.add("<table border=\"1\">");
+      Map<String, String> qn = queryNames.get(id);
+      for (Double d : times.descendingKeySet())
+      {
+         List<String> stmts = times.get(d);
+         StringBuilder sb = new StringBuilder();
+         for (int i = 0; i < stmts.size(); i++)
+         {
+            if (!filterStatement(stmts.get(i), true) && qn.get(stmts.get(i)) != null)
+            {
+               sb = sb.append("<a href=\"" + (qn.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
+               if (i < stmts.size() - 1)
+                  sb = sb.append("<p>");
+            }
+            else
+            {
+               sb = sb.append(stmts.get(i));
+               if (i < stmts.size() - 1)
+                  sb = sb.append("<p>");
+            }
+         }
+
+         l.add("<tr>");
+         l.add("<td>" + String.format("%.3f", d) + "ms</td>");
+         l.add("<td>" + sb.toString() + "</td>");
+         l.add("</tr>");
+         count++;
+
+         if (count == cutoff)
+            break;
+      }
+      l.add("</table>");
+
+      return l;
    }
 
    /**
@@ -1869,6 +1963,9 @@ public class LogAnalyzer
     */
    private static boolean filterStatement(String stmt, boolean all)
    {
+      if (stmt == null || "".equals(stmt))
+         return true;
+
       if ("BEGIN".equals(stmt) ||
           stmt.startsWith("ROLLBACK") ||
           stmt.startsWith("COMMIT") ||
