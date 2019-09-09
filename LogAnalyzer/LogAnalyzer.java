@@ -1224,7 +1224,14 @@ public class LogAnalyzer
          l.add("</table>");
 
          l.add("<p>");
-         l.add(disconnectText);
+         if (!"".equals(disconnectText))
+         {
+             l.add(disconnectText);
+         }
+         else
+         {
+             l.add("<b>No disconnect event found</b>");
+         }
 
          l.add("<p>");
          l.add("<a href=\"index.html\">Back</a>");
