@@ -419,13 +419,20 @@ public class LogAnalyzer
             String pname = (!multidb ? Integer.toString(processId) : id + "-" + processId);
             if (interaction)
             {
-               if (!hasError(lle))
+               boolean err = hasError(lle);
+               boolean dis = hasDisconnect(lle);
+               if (!err && dis)
                {
                   interactionLinks.add("<a href=\"" + pname + ".html\">" + processId + "</a>(" + executeCount + ")&nbsp;");
                }
-               else
+               else if (err)
                {
                   interactionLinks.add("<a style=\"background-color:#ff0000\" href=\"" + pname + ".html\">" + processId +
+                                       "</a>(" + executeCount + ")&nbsp;");
+               }
+               else
+               {
+                  interactionLinks.add("<a style=\"background-color:#ffff00\" href=\"" + pname + ".html\">" + processId +
                                        "</a>(" + executeCount + ")&nbsp;");
                }
             }
@@ -1541,6 +1548,22 @@ public class LogAnalyzer
       {
          if (le.isError())
             return true;
+      }
+
+      return false;
+   }
+
+   /**
+    * Is there a disconnect event in the interaction
+    * @param lle The interactions
+    * @return True, if disconnected; otherwise false
+    */
+   private static boolean hasDisconnect(List<LogEntry> lle)
+   {
+      if (lle.size() > 0)
+      {
+         LogEntry lastEntry = lle.get(lle.size() - 1);
+         return lastEntry.getFullStatement().indexOf("disconnection") != -1;
       }
 
       return false;
