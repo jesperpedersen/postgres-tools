@@ -34,7 +34,7 @@ PostgreSQLInfo takes an optional 2nd parameter, which is the PostgreSQL major ve
 /path/to/java PostgreSQLInfo /path/to/data_directory 9.6
 ```
 
-which will compare the GUCs against their default. Default version is `11`.
+which will compare the GUCs against their default. Default version is `12`.
 
 ## Report
 
