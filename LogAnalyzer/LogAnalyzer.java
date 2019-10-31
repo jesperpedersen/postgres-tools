@@ -1579,95 +1579,107 @@ public class LogAnalyzer
       if (s == null || "".equals(s))
          return EOF;
 
-      int bracket1Start = s.indexOf("[");
-      int bracket1End = s.indexOf("]");
+      int from = s.indexOf("[");
+      int to = s.indexOf("]");
 
-      if (bracket1Start != -1)
+      if (from == -1 || to == -1)
+         return UNKNOWN;
+
+      from = s.indexOf("[", to + 1);
+      to = s.indexOf("]", to + 1);
+
+      if (from == -1 || to == -1)
+         return UNKNOWN;
+
+      if (multidb)
       {
-         int bracket2Start = s.indexOf("[", bracket1End + 1);
-         int bracket2End = s.indexOf("]", bracket1End + 1);
+         from = s.indexOf("[", to + 1);
+         to = s.indexOf("]", to + 1);
 
-         if (multidb)
-         {
-            bracket2Start = s.indexOf("[", bracket2End + 1);
-            bracket2End = s.indexOf("]", bracket2End + 1);
-         }
+         if (from == -1 || to == -1)
+            return UNKNOWN;
+      }
 
-         String type = s.substring(bracket2End + 2, s.indexOf(":", bracket2End + 2));
+      from = to + 2;
+      to = s.indexOf(":", to + 2);
 
-         if ("LOG".equals(type))
-         {
-            return LOG;
-         }
-         else if ("STATEMENT".equals(type))
-         {
-            return STATEMENT;
-         }
-         else if ("DETAIL".equals(type))
-         {
-            return DETAIL;
-         }
-         else if ("NOTICE".equals(type))
-         {
-            return NOTICE;
-         }
-         else if ("PANIC".equals(type))
-         {
-            return PANIC;
-         }
-         else if ("FATAL".equals(type))
-         {
-            return FATAL;
-         }
-         else if ("ERROR".equals(type))
-         {
-            return ERROR;
-         }
-         else if ("WARNING".equals(type))
-         {
-            return WARNING;
-         }
-         else if ("INFO".equals(type))
-         {
-            return INFO;
-         }
-         else if ("DEBUG".equals(type))
-         {
-            return DEBUG1;
-         }
-         else if ("DEBUG1".equals(type))
-         {
-            return DEBUG1;
-         }
-         else if ("DEBUG2".equals(type))
-         {
-            return DEBUG2;
-         }
-         else if ("DEBUG3".equals(type))
-         {
-            return DEBUG3;
-         }
-         else if ("DEBUG4".equals(type))
-         {
-            return DEBUG4;
-         }
-         else if ("DEBUG5".equals(type))
-         {
-            return DEBUG5;
-         }
-         else if ("HINT".equals(type))
-         {
-            return HINT;
-         }
-         else if ("CONTEXT".equals(type))
-         {
-            return CONTEXT;
-         }
-         else
-         {
-            System.out.println("Unknown log line type for: " + s);
-            System.exit(1);
-         }
+      if (to == -1)
+         return UNKNOWN;
+
+      String type = s.substring(from, to);
+
+      if ("LOG".equals(type))
+      {
+         return LOG;
+      }
+      else if ("STATEMENT".equals(type))
+      {
+         return STATEMENT;
+      }
+      else if ("DETAIL".equals(type))
+      {
+         return DETAIL;
+      }
+      else if ("NOTICE".equals(type))
+      {
+         return NOTICE;
+      }
+      else if ("PANIC".equals(type))
+      {
+         return PANIC;
+      }
+      else if ("FATAL".equals(type))
+      {
+         return FATAL;
+      }
+      else if ("ERROR".equals(type))
+      {
+         return ERROR;
+      }
+      else if ("WARNING".equals(type))
+      {
+         return WARNING;
+      }
+      else if ("INFO".equals(type))
+      {
+         return INFO;
+      }
+      else if ("DEBUG".equals(type))
+      {
+         return DEBUG1;
+      }
+      else if ("DEBUG1".equals(type))
+      {
+         return DEBUG1;
+      }
+      else if ("DEBUG2".equals(type))
+      {
+         return DEBUG2;
+      }
+      else if ("DEBUG3".equals(type))
+      {
+         return DEBUG3;
+      }
+      else if ("DEBUG4".equals(type))
+      {
+         return DEBUG4;
+      }
+      else if ("DEBUG5".equals(type))
+      {
+         return DEBUG5;
+      }
+      else if ("HINT".equals(type))
+      {
+         return HINT;
+      }
+      else if ("CONTEXT".equals(type))
+      {
+         return CONTEXT;
+      }
+      else
+      {
+         System.out.println("Unknown log line type for: " + s);
+         System.exit(1);
       }
 
       return UNKNOWN;
