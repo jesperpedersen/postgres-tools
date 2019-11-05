@@ -25,7 +25,9 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
+import java.io.InputStreamReader;
 import java.io.LineNumberReader;
+import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -43,6 +45,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.zip.GZIPInputStream;
 
 /**
  * Log analyzer
@@ -1810,15 +1813,26 @@ public class LogAnalyzer
    private static void processLog() throws Exception
    {
       Map<String, Set<Integer>> clients = new TreeMap<>();
-      FileReader fr = null;
+      File f = null;
+      Reader r = null;
       LineNumberReader lnr = null;
       String s = null;
       String str = null;
       LogEntry le = null;
       try
       {
-         fr = new FileReader(Paths.get(filename).toFile());
-         lnr = new LineNumberReader(fr);
+         f = Paths.get(filename).toFile();
+         if (filename.endsWith(".gz"))
+         {
+            FileInputStream fis = new FileInputStream(f);
+            GZIPInputStream gis = new GZIPInputStream(fis);
+            r = new InputStreamReader(gis);
+         }
+         else
+         {
+            r = new FileReader(f);
+         }
+         lnr = new LineNumberReader(r);
          s = lnr.readLine();
 
          while (s != null)
@@ -1971,8 +1985,8 @@ public class LogAnalyzer
          if (lnr != null)
             lnr.close();
 
-         if (fr != null)
-            fr.close();
+         if (r != null)
+            r.close();
       }
 
       if (keepRaw)

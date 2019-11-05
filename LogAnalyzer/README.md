@@ -97,6 +97,8 @@ cd /path/to/work_area
 /path/to/java LogAnalyzer postgresql.log
 ```
 
+LogAnalyzer support files compressed with GZip as well.
+
 ## Report
 
 The report is located in the ```/path/to/work_area/report``` directory. The main report is ```index.html```
