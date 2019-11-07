@@ -167,6 +167,9 @@ public class LogAnalyzer
    /** Statements:    Db          SQL     Count */
    private static Map<String, Map<String, Integer>> statements = new TreeMap<>();
 
+   /** Min time:      Db          SQL     Min time */
+   private static Map<String, Map<String, Double>> mintime = new TreeMap<>();
+
    /** Max time:      Db          SQL     Max time */
    private static Map<String, Map<String, Double>> maxtime = new TreeMap<>();
 
@@ -632,6 +635,12 @@ public class LogAnalyzer
       l.add("<p>");
       l.add("<a href=\"" + (multidb ? id + "-" : "") + "maxtime.html\">Report</a>");
 
+      l.add("<h2>Avg time</h2>");
+      l.addAll(getAvgInfo(id, 20));
+      writeAvgReport(id);
+      l.add("<p>");
+      l.add("<a href=\"" + (multidb ? id + "-" : "") + "avgtime.html\">Report</a>");
+
       if (histogramCount > 0)
       {
          l.add("<h2>Transaction histogram</h2>");
@@ -881,8 +890,20 @@ public class LogAnalyzer
                tt.put(s, time);
                totaltime.put(id, tt);
 
+               // Min time
+               Map<String, Double> mt = mintime.get(id);
+               if (mt == null)
+                  mt = new TreeMap<>();
+               time = mt.get(s);
+               if (time == null || duration < time.doubleValue())
+               {
+                  time = new Double(duration);
+                  mt.put(s, time);
+               }
+               mintime.put(id, mt);
+
                // Max time
-               Map<String, Double> mt = maxtime.get(id);
+               mt = maxtime.get(id);
                if (mt == null)
                   mt = new TreeMap<>();
                time = mt.get(s);
@@ -1371,6 +1392,14 @@ public class LogAnalyzer
       l.add("<td><b>Max time</b></td>");
       l.add("<td>" + String.format("%.3f", maxtime.get(id).get(sql)) + " ms</td>");
       l.add("</tr>");
+      l.add("<tr>");
+      l.add("<td><b>Avg time</b></td>");
+      l.add("<td>" + String.format("%.3f", (totaltime.get(id).get(sql) / statements.get(id).get(sql))) + " ms</td>");
+      l.add("</tr>");
+      l.add("<tr>");
+      l.add("<td><b>Min time</b></td>");
+      l.add("<td>" + String.format("%.3f", mintime.get(id).get(sql)) + " ms</td>");
+      l.add("</tr>");
       l.add("</table>");
       l.add("<p>");
 
@@ -1520,6 +1549,38 @@ public class LogAnalyzer
       l.add("</html>");
 
       writeFile(Paths.get("report", (multidb ? id + "-" : "") + "maxtime.html"), l);
+   }
+
+   /**
+    * Write the avg report
+    * @param id The database identifier
+    */
+   private static void writeAvgReport(String id) throws Exception
+   {
+      List<String> l = new ArrayList<>();
+
+      l.add("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"");
+      l.add("                      \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">");
+      l.add("");
+      l.add("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">");
+      l.add("<head>");
+      l.add("  <title>Log Analysis: Avg time</title>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"loganalyzer.css\"/>");
+      l.add("  <link rel=\"stylesheet\" type=\"text/css\" href=\"dygraph.min.css\"/>");
+      l.add("  <script type=\"text/javascript\" src=\"dygraph.min.js\"></script>");
+      l.add("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+      l.add("</head>");
+      l.add("<body>");
+      l.add("<h1>Avg time</h1>");
+
+      l.addAll(getAvgInfo(id, Integer.MAX_VALUE));
+
+      l.add("<p>");
+      l.add("<a href=\"index.html\">Back</a>");
+      l.add("</body>");
+      l.add("</html>");
+
+      writeFile(Paths.get("report", (multidb ? id + "-" : "") + "avgtime.html"), l);
    }
 
    /**
@@ -1748,7 +1809,7 @@ public class LogAnalyzer
    }
 
    /**
-    * Get the lines for the time report
+    * Get the lines for the max time report
     */
    private static List<String> getMaxInfo(String id, int cutoff)
    {
@@ -1762,6 +1823,72 @@ public class LogAnalyzer
          for (String stmt : mt.keySet())
          {
             Double d = mt.get(stmt);
+            List<String> stmts = times.get(d);
+            if (stmts == null)
+               stmts = new ArrayList<>();
+
+            stmts.add(stmt);
+            times.put(d, stmts);
+         }
+      }
+
+      l.add("<table border=\"1\">");
+      Map<String, String> qn = queryNames.get(id);
+      for (Double d : times.descendingKeySet())
+      {
+         List<String> stmts = times.get(d);
+         StringBuilder sb = new StringBuilder();
+         for (int i = 0; i < stmts.size(); i++)
+         {
+            if (!filterStatement(stmts.get(i), true) && qn.get(stmts.get(i)) != null)
+            {
+               sb = sb.append("<a href=\"" + (qn.get(stmts.get(i))) + ".html\" class=\"nohighlight\">" + stmts.get(i) + "</a>");
+               if (i < stmts.size() - 1)
+                  sb = sb.append("<p>");
+            }
+            else
+            {
+               sb = sb.append(stmts.get(i));
+               if (i < stmts.size() - 1)
+                  sb = sb.append("<p>");
+            }
+         }
+
+         l.add("<tr>");
+         l.add("<td>" + String.format("%.3f", d) + "ms</td>");
+         l.add("<td>" + sb.toString() + "</td>");
+         l.add("</tr>");
+         count++;
+
+         if (count == cutoff)
+            break;
+      }
+      l.add("</table>");
+
+      return l;
+   }
+
+   /**
+    * Get the lines for the avg time report
+    */
+   private static List<String> getAvgInfo(String id, int cutoff)
+   {
+      List<String> l = new ArrayList<>();
+      TreeMap<Double, List<String>> times = new TreeMap<>();
+      Map<String, Double> tt = totaltime.get(id);
+      Map<String, Integer> counts = statements.get(id);
+
+      int count = 0;
+
+      if (tt != null)
+      {
+         for (String stmt : tt.keySet())
+         {
+            Double d = tt.get(stmt);
+            Integer c = counts.get(stmt);
+
+            d = d / c;
+
             List<String> stmts = times.get(d);
             if (stmts == null)
                stmts = new ArrayList<>();
